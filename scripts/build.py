@@ -240,6 +240,7 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
 
     assets: list[dict] = []
     masters: dict[str, dict] = {}
+    record_types: dict[str, int] = {}
     rank = 0
     for _ in range(1000):  # hard stop; 100 assets per page
         q = {
@@ -259,6 +260,8 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
         r.raise_for_status()
         records = r.json().get("records") or []
         page_assets = [x for x in records if x.get("recordType") == "CPLAsset"]
+        for x in records:
+            record_types[str(x.get("recordType", "?"))] = record_types.get(str(x.get("recordType", "?")), 0) + 1
         for x in records:
             if x.get("recordType") == "CPLMaster":
                 masters[x["recordName"]] = x
@@ -315,6 +318,7 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
     if location_report_enabled():
         from collections import Counter
         print("Location report (field names, types and counts only):")
+        print(f"  record types returned: {record_types}")
         for line in location_report(published_af, published_mf):
             print("  " + line)
         print(f"  image source used: {dict(Counter(i['source'] for i in items))}")

@@ -297,16 +297,7 @@ def test_comment_lookup_failure_never_breaks_the_build():
 
 class FakeCKWithPosts(FakeCKWithComments):
     def __init__(self, records, posts):
-        super().__init__(records, {})
-        self.posts = posts
-
-    def post(self, url, params=None, data=None, timeout=None):
-        import json
-        q = json.loads(data).get("query", {}) if data else {}
-        if q.get("recordType") == "CPLPost_CPLPost":
-            rank = q["filterBy"][0]["fieldValue"]["value"]
-            return FakeResp(200, {"records": self.posts if rank == 0 else []})
-        return super().post(url, params=params, data=data, timeout=timeout)
+        super().__init__(records, {"_posts": posts})
 
 
 def post_rec(name, caption, by="_owner"):

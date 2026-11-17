@@ -290,3 +290,36 @@ def test_comment_lookup_failure_never_breaks_the_build():
     recs = [master("m1"), asset("a1", "m1", 1700000000000)]
     _, items = build.fetch_cloudkit_album("0TOKEN", session=Broken(recs, {}))
     assert len(items) == 1 and items[0]["caption"] == ""
+
+
+class FakeCKWithPosts(FakeCKWithComments):
+    def __init__(self, records, posts):
+        super().__init__(records, {})
+        self.posts = posts
+
+    def post(self, url, params=None, data=None, timeout=None):
+        import json
+        q = json.loads(data).get("query", {}) if data else {}
+        if q.get("recordType") == "CPLPost_CPLPost":
+            rank = q["filterBy"][0]["fieldValue"]["value"]
+            return FakeResp(200, {"records": self.posts if rank == 0 else []})
+        return super().post(url, params=params, data=data, timeout=timeout)
+
+
+def post_rec(name, caption, by="_owner"):
+    return {"recordName": name, "recordType": "CPLPost", "fields": {"caption": {"value": caption}},
+            "created": {"userRecordName": by}}
+
+
+def test_post_caption_titles_single_photo_posts_only():
+    recs = [
+        master("m1"), asset("a1", "m1", 1700000000000, assetBatchId={"value": "P1"}),
+        master("m2"), asset("a2", "m2", 1700000001000, assetBatchId={"value": "P2"}),
+        master("m3"), asset("a3", "m3", 1700000002000, assetBatchId={"value": "P2"}),
+        master("m4"), asset("a4", "m4", 1700000003000, assetBatchId={"value": "P3"}),
+    ]
+    posts = [post_rec("P1", "Lake Shore"), post_rec("P2", "A whole batch"), post_rec("P3", "stranger", by="_x")]
+    _, items = build.fetch_cloudkit_album("0TOKEN", session=FakeCKWithPosts(recs, posts))
+    caps = {i["checksum"]: i["caption"] for i in items}
+    assert caps == {"orig-m1": "Lake Shore", "orig-m2": "", "orig-m3": "", "orig-m4": ""}
+    assert all("_batch" not in i for i in items)

@@ -277,6 +277,56 @@ def fetch_owner_comments(s, query_url: str, params: dict, zone: dict, owner: str
     return out
 
 
+def fetch_owner_post_captions(s, query_url: str, params: dict, zone: dict, owner: str,
+                              stats: dict | None = None) -> dict[str, str]:
+    """Map post recordName (== CPLAsset.assetBatchId) -> the owner's caption on it.
+
+    The text typed when adding photos to a shared album is stored as a "post"
+    caption, not as a comment on a photo. Failures just mean "no caption".
+    """
+    out: dict[str, str] = {}
+    stats = stats if stats is not None else {}
+    rank = 0
+    for _ in range(50):
+        q = {
+            "query": {
+                "recordType": "CPLPost_CPLPost",
+                "filterBy": [
+                    {"fieldName": "startRank", "comparator": "EQUALS", "fieldValue": {"value": rank, "type": "INT64"}},
+                    {"fieldName": "direction", "comparator": "EQUALS", "fieldValue": {"value": "ASCENDING", "type": "STRING"}},
+                ],
+            },
+            "zoneID": zone,
+            "resultsLimit": 100,
+        }
+        try:
+            r = _post(s, query_url, q, params=params)
+            if r.status_code >= 400:
+                stats["errors"] = stats.get("errors", 0) + 1
+                stats.setdefault("error_codes", set()).add(r.status_code)
+                break
+            records = r.json().get("records") or []
+        except Exception:
+            stats["errors"] = stats.get("errors", 0) + 1
+            break
+        posts = [x for x in records if x.get("recordType") == "CPLPost"]
+        stats["post_records"] = stats.get("post_records", 0) + len(posts)
+        for x in posts:
+            f = x.get("fields") or {}
+            stats.setdefault("fields", set()).update(f.keys())
+            if (x.get("created") or {}).get("userRecordName") != owner:
+                continue
+            v = (f.get("caption") or {}).get("value")
+            text = v.strip() if isinstance(v, str) else _decode_text(f.get("captionEnc"))
+            if text:
+                out[x["recordName"]] = text
+        if not posts:
+            break
+        rank += len(posts)
+    stats["owner_posts_with_caption"] = len(out)
+    return out
+
+
 def fetch_cloudkit_album(token: str, session: requests.Session | None = None) -> tuple[str, list[dict]]:
     """Return (album_name, [{checksum, url, caption, taken, added}]) for a shared collection."""
     s = _ck_session(session)
@@ -370,6 +420,7 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
             "added": iso_ms((af.get("addedDate") or {}).get("value")),
             "source": ("edited", "original", "jpeg-full", "jpeg-medium")[pick],
             "_asset": a["recordName"],
+            "_batch": (af.get("assetBatchId") or {}).get("value") or "",
         })
     if not_owner:
         print(f"  ignored {not_owner} photo(s) added by someone other than the album owner")
@@ -381,7 +432,28 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
     for i in items:
         if not i["caption"] and comments.get(i["_asset"]):
             i["caption"] = comments[i["_asset"]]
+    # Next: the text typed when the photo was added (a "post" caption). Only
+    # used when that post added a single published photo, so one caption isn't
+    # stamped onto a whole batch.
+    post_stats: dict = {}
+    if any(not i["caption"] for i in items):
+        posts = fetch_owner_post_captions(s, query_url, params, zone, owner, post_stats)
+        per_batch: dict[str, int] = {}
+        for i in items:
+            if i["_batch"]:
+                per_batch[i["_batch"]] = per_batch.get(i["_batch"], 0) + 1
+        used = 0
+        for i in items:
+            if not i["caption"] and i["_batch"] in posts and per_batch.get(i["_batch"]) == 1:
+                i["caption"] = posts[i["_batch"]]
+                used += 1
+        post_stats["used"] = used
+        post_stats["batch_sizes_with_caption"] = sorted(per_batch.get(b, 0) for b in posts)
+        if used:
+            print(f"  titles from album post captions: {used}")
+    for i in items:
         i.pop("_asset", None)
+        i.pop("_batch", None)
     if comments:
         print(f"  titles from album comments: {len(comments)}")
     if location_report_enabled():
@@ -396,6 +468,12 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
               f"{comment_stats.get('photos_with_owner_comment', 0)} photo(s) with an owner comment; "
               f"errors {comment_stats.get('errors', 0)} {sorted(comment_stats.get('error_codes', []))}; "
               f"fields {sorted(f for f in comment_stats.get('fields', []) if _SAFE_NAME.match(f))}")
+        print(f"  post lookup: {post_stats.get('post_records', 0)} post record(s); "
+              f"{post_stats.get('owner_posts_with_caption', 0)} owner post(s) with a caption; "
+              f"published photos per captioned post {post_stats.get('batch_sizes_with_caption', [])}; "
+              f"used {post_stats.get('used', 0)}; errors {post_stats.get('errors', 0)} "
+              f"{sorted(post_stats.get('error_codes', []))}; "
+              f"fields {sorted(f for f in post_stats.get('fields', []) if _SAFE_NAME.match(f))}")
     return name, items
 
 

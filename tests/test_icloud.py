@@ -88,7 +88,8 @@ def test_cloudkit_album_picks_edits_skips_video_and_hidden():
     assert by["orig-m1"]["caption"] == "Pantheon"
     assert by["orig-m1"]["url"] == "https://cvws.icloud-content.com/B/x/photo.jpg?o=1"
     assert by["orig-m1"]["added"] == "2023-11-14T22:13:20Z"
-    assert len(s.queries) == 2  # second page comes back empty and stops paging
+    pages = [q for q in s.queries if '"CPLAssetAndMasterByAddedDate"' in q]
+    assert len(pages) == 2  # second page comes back empty and stops paging
 
 
 # ---- classic shared albums (sharedstreams) ----
@@ -230,3 +231,62 @@ def test_location_report_flags_gps_inside_media_metadata_without_values():
     assert "HAS-GPS" in out and "{GPS}" in out and "Latitude" in out
     for leak in ("41.87", "87.62", "Secret Lens"):
         assert leak not in out
+
+
+# ---- titles from shared-album comments ----
+
+class FakeCKWithComments(FakeCK):
+    def __init__(self, records, comments):
+        super().__init__(records)
+        self.comments = comments  # asset recordName -> [comment records]
+
+    def post(self, url, params=None, data=None, timeout=None):
+        import json
+        if data and json.loads(data).get("query", {}).get("recordType") == "CPLTextCommentForAsset":
+            parent = json.loads(data)["query"]["filterBy"][2]["fieldValue"]["value"]
+            return FakeResp(200, {"records": self.comments.get(parent, [])})
+        return super().post(url, params=params, data=data, timeout=timeout)
+
+
+def comment(text, by="_owner", ts=1700000000000, encoded=False):
+    f = {"commentTimestamp": {"value": ts}}
+    if encoded:
+        f["commentTextEnc"] = {"value": base64.b64encode(text.encode()).decode()}
+    else:
+        f["commentText"] = {"value": text}
+    return {"recordType": "CPLTextComment", "fields": f, "created": {"userRecordName": by}}
+
+
+def test_owner_comment_becomes_title_but_strangers_and_captions_win_correctly():
+    caption = base64.b64encode("Pantheon".encode()).decode()
+    recs = [
+        master("m1"), asset("a1", "m1", 1700000000000, captionEnc={"value": caption}),
+        master("m2"), asset("a2", "m2", 1700000001000),
+        master("m3"), asset("a3", "m3", 1700000002000),
+        master("m4"), asset("a4", "m4", 1700000003000),
+    ]
+    comments = {
+        "a1": [comment("ignored, caption wins")],
+        "a2": [comment("Second thought", ts=1700000009000), comment("Wacker Drive", ts=1700000005000)],
+        "a3": [comment("spam from a stranger", by="_stranger")],
+        "a4": [comment("Encoded title", encoded=True)],
+    }
+    _, items = build.fetch_cloudkit_album("0TOKEN", session=FakeCKWithComments(recs, comments))
+    caps = {i["checksum"]: i["caption"] for i in items}
+    assert caps["orig-m1"] == "Pantheon"
+    assert caps["orig-m2"] == "Wacker Drive"      # owner's earliest comment
+    assert caps["orig-m3"] == ""                  # strangers' comments never become titles
+    assert caps["orig-m4"] == "Encoded title"
+    assert all("_asset" not in i for i in items)
+
+
+def test_comment_lookup_failure_never_breaks_the_build():
+    class Broken(FakeCKWithComments):
+        def post(self, url, params=None, data=None, timeout=None):
+            import json
+            if data and json.loads(data).get("query", {}).get("recordType") == "CPLTextCommentForAsset":
+                return FakeResp(400, {"serverErrorCode": "BAD_REQUEST"})
+            return super().post(url, params=params, data=data, timeout=timeout)
+    recs = [master("m1"), asset("a1", "m1", 1700000000000)]
+    _, items = build.fetch_cloudkit_album("0TOKEN", session=Broken(recs, {}))
+    assert len(items) == 1 and items[0]["caption"] == ""

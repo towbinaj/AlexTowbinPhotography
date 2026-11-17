@@ -1,0 +1,60 @@
+name: Build & deploy site
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 9 * * *"   # daily, ~4am US Eastern: pick up new album photos
+  workflow_dispatch:        # "Run workflow" button for an immediate refresh
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Keep downloaded originals between runs so only new photos are fetched.
+      - uses: actions/cache@v4
+        with:
+          path: .cache/originals
+          key: originals-${{ github.run_id }}
+          restore-keys: originals-
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Build
+        env:
+          ICLOUD_ALBUM_TOKEN: ${{ secrets.ICLOUD_ALBUM_TOKEN }}
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+        run: python scripts/build.py
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

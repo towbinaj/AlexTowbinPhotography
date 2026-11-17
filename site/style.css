@@ -98,7 +98,7 @@ body.has-cursor .cursor.big span { opacity: 1; }
 .hero-media .slide.on { clip-path: inset(0 0 0 0); z-index: 1; }
 .hero-media .slide.was { clip-path: inset(0 0 0 0); z-index: 0; }
 /* Photos are framed prints: show each one whole, floating, never cropped. */
-.hero-media img { width: 100%; height: 100%; object-fit: contain; object-position: center; display: block; transform: scale(1.04); transition: transform 7s linear; filter: drop-shadow(0 30px 60px rgba(0,0,0,.55)); }
+.hero-media img { width: 100%; height: 100%; object-fit: contain; object-position: center; display: block; transform: scale(.96); transition: transform 7s linear; filter: drop-shadow(0 30px 60px rgba(0,0,0,.55)); }
 .hero-media .slide.on img { transform: scale(1); }
 .hero-index { position: absolute; z-index: 2; right: 0; bottom: 0; color: var(--muted); }
 

@@ -236,20 +236,23 @@ def test_location_report_flags_gps_inside_media_metadata_without_values():
 # ---- titles from shared-album comments ----
 
 class FakeCKWithComments(FakeCK):
+    """Adds the zone change feed (where shared-album comments come from)."""
     def __init__(self, records, comments):
         super().__init__(records)
         self.comments = comments  # asset recordName -> [comment records]
 
     def post(self, url, params=None, data=None, timeout=None):
-        import json
-        if data and json.loads(data).get("query", {}).get("recordType") == "CPLTextCommentForAsset":
-            parent = json.loads(data)["query"]["filterBy"][2]["fieldValue"]["value"]
-            return FakeResp(200, {"records": self.comments.get(parent, [])})
+        if url.endswith("/changes/zone"):
+            import json
+            assert json.loads(data)["zones"][0]["zoneID"] == ZONE
+            recs = [c for cs in self.comments.values() for c in cs]
+            return FakeResp(200, {"zones": [{"records": recs, "moreComing": False, "syncToken": "T1"}]})
         return super().post(url, params=params, data=data, timeout=timeout)
 
 
-def comment(text, by="_owner", ts=1700000000000, encoded=False):
-    f = {"commentTimestamp": {"value": ts}}
+def comment(on, text, by="_owner", ts=1700000000000, encoded=False):
+    f = {"commentTimestamp": {"value": ts},
+         "associatedAssetRef": {"value": {"recordName": on, "action": "NONE"}}}
     if encoded:
         f["commentTextEnc"] = {"value": base64.b64encode(text.encode()).decode()}
     else:
@@ -266,10 +269,10 @@ def test_owner_comment_becomes_title_but_strangers_and_captions_win_correctly():
         master("m4"), asset("a4", "m4", 1700000003000),
     ]
     comments = {
-        "a1": [comment("ignored, caption wins")],
-        "a2": [comment("Second thought", ts=1700000009000), comment("Wacker Drive", ts=1700000005000)],
-        "a3": [comment("spam from a stranger", by="_stranger")],
-        "a4": [comment("Encoded title", encoded=True)],
+        "a1": [comment("a1", "ignored, caption wins")],
+        "a2": [comment("a2", "Second thought", ts=1700000009000), comment("a2", "Wacker Drive", ts=1700000005000)],
+        "a3": [comment("a3", "spam from a stranger", by="_stranger")],
+        "a4": [comment("a4", "Encoded title", encoded=True)],
     }
     _, items = build.fetch_cloudkit_album("0TOKEN", session=FakeCKWithComments(recs, comments))
     caps = {i["checksum"]: i["caption"] for i in items}
@@ -284,7 +287,7 @@ def test_comment_lookup_failure_never_breaks_the_build():
     class Broken(FakeCKWithComments):
         def post(self, url, params=None, data=None, timeout=None):
             import json
-            if data and json.loads(data).get("query", {}).get("recordType") == "CPLTextCommentForAsset":
+            if url.endswith("/changes/zone"):
                 return FakeResp(400, {"serverErrorCode": "BAD_REQUEST"})
             return super().post(url, params=params, data=data, timeout=timeout)
     recs = [master("m1"), asset("a1", "m1", 1700000000000)]

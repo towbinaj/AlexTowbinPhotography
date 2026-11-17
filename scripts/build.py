@@ -228,53 +228,54 @@ def _comment_text(fields: dict) -> str:
     return _decode_text(fields.get("commentTextEnc"))
 
 
-def fetch_owner_comments(s, query_url: str, params: dict, zone: dict, owner: str,
-                         asset_names: list[str], stats: dict | None = None) -> dict[str, str]:
+def fetch_owner_comments(s, changes_url: str, params: dict, zone: dict, owner: str,
+                         stats: dict | None = None) -> dict[str, str]:
     """Map asset recordName -> the album owner's earliest comment on it.
 
-    Shared-album comments live in their own records, listed per photo. Only the
-    owner's comments are used (anyone who joins via the link can comment). Any
-    failure just means "no comment": captions are a nice-to-have, never a reason
-    to fail the build.
+    Shared-album comments (CPLTextComment records, linked to their photo by
+    associatedAssetRef) come through the zone's change feed, the same way
+    Apple's web viewer gets them. Only the owner's comments are used, since
+    anyone who joins via the link can comment. Any failure just means "no
+    comment": titles are a nice-to-have, never a reason to fail the build.
     """
-    out: dict[str, str] = {}
     stats = stats if stats is not None else {}
-    for name in asset_names:
-        q = {
-            "query": {
-                "recordType": "CPLTextCommentForAsset",
-                "filterBy": [
-                    {"fieldName": "startRank", "comparator": "EQUALS", "fieldValue": {"value": 0, "type": "INT64"}},
-                    {"fieldName": "direction", "comparator": "EQUALS", "fieldValue": {"value": "ASCENDING", "type": "STRING"}},
-                    {"fieldName": "parentId", "comparator": "EQUALS", "fieldValue": {"value": name, "type": "STRING"}},
-                ],
-            },
-            "zoneID": zone,
-            "resultsLimit": 50,
-        }
+    found: dict[str, tuple] = {}
+    token = None
+    for _ in range(100):  # hard stop on paging
+        body: dict = {"zones": [{"zoneID": zone, **({"syncToken": token} if token else {})}]}
         try:
-            r = _post(s, query_url, q, params=params)
+            r = _post(s, changes_url, body, params=params)
             if r.status_code >= 400:
                 stats["errors"] = stats.get("errors", 0) + 1
                 stats.setdefault("error_codes", set()).add(r.status_code)
-                continue
-            records = r.json().get("records") or []
+                break
+            zones = r.json().get("zones") or []
         except Exception:
             stats["errors"] = stats.get("errors", 0) + 1
-            continue
-        comments = [x for x in records if x.get("recordType") == "CPLTextComment"]
-        stats["comment_records"] = stats.get("comment_records", 0) + len(comments)
-        for x in comments:
-            stats.setdefault("fields", set()).update((x.get("fields") or {}).keys())
-        mine = [x for x in comments if (x.get("created") or {}).get("userRecordName") == owner]
-        mine.sort(key=lambda x: ((x.get("fields") or {}).get("commentTimestamp") or {}).get("value") or 0)
-        for x in mine:
-            text = _comment_text(x.get("fields") or {})
-            if text:
-                out[name] = text
-                break
-    stats["photos_with_owner_comment"] = len(out)
-    return out
+            break
+        z = zones[0] if zones else {}
+        for x in z.get("records") or []:
+            rt = str(x.get("recordType", "?"))
+            types = stats.setdefault("record_types", {})
+            types[rt] = types.get(rt, 0) + 1
+            if rt != "CPLTextComment":
+                continue
+            f = x.get("fields") or {}
+            stats.setdefault("fields", set()).update(f.keys())
+            if (x.get("created") or {}).get("userRecordName") != owner:
+                continue
+            ref = ((f.get("associatedAssetRef") or {}).get("value") or {}).get("recordName")
+            text = _comment_text(f)
+            if not ref or not text:
+                continue
+            ts = (f.get("commentTimestamp") or {}).get("value") or 0
+            if ref not in found or ts < found[ref][0]:
+                found[ref] = (ts, text)
+        token = z.get("syncToken")
+        if not z.get("moreComing") or not token:
+            break
+    stats["photos_with_owner_comment"] = len(found)
+    return {k: v[1] for k, v in found.items()}
 
 
 def fetch_owner_post_captions(s, query_url: str, params: dict, zone: dict, owner: str,
@@ -343,6 +344,7 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
     name = (((res.get("share") or {}).get("fields") or {}).get("cloudkit.title") or {}).get("value", "")
     partition = access["databasePartition"].rstrip("/")
     query_url = f"{partition}/database/1/com.apple.photos.cloud/production/shared/records/query"
+    changes_url = f"{partition}/database/1/com.apple.photos.cloud/production/shared/changes/zone"
     params = {"remapEnums": "true", "sharing_url_key": token, "publicAccessAuthToken": access["token"]}
 
     assets: list[dict] = []
@@ -427,8 +429,8 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
     # Photos captions don't travel into shared albums, but comments do: use the
     # owner's first comment on a photo as its title when there's no caption.
     comment_stats: dict = {}
-    need = [i["_asset"] for i in items if not i["caption"]]
-    comments = fetch_owner_comments(s, query_url, params, zone, owner, need, comment_stats) if need else {}
+    need = any(not i["caption"] for i in items)
+    comments = fetch_owner_comments(s, changes_url, params, zone, owner, comment_stats) if need else {}
     for i in items:
         if not i["caption"] and comments.get(i["_asset"]):
             i["caption"] = comments[i["_asset"]]
@@ -464,7 +466,8 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
             print("  " + line)
         print(f"  image source used: {dict(Counter(i['source'] for i in items))}")
         print(f"  photos with a caption/title: {sum(1 for i in items if i['caption'])}/{len(items)}")
-        print(f"  comment lookup: {comment_stats.get('comment_records', 0)} comment record(s); "
+        print(f"  zone change feed record types: {comment_stats.get('record_types', {})}")
+        print(f"  comment lookup: {comment_stats.get('record_types', {}).get('CPLTextComment', 0)} comment record(s); "
               f"{comment_stats.get('photos_with_owner_comment', 0)} photo(s) with an owner comment; "
               f"errors {comment_stats.get('errors', 0)} {sorted(comment_stats.get('error_codes', []))}; "
               f"fields {sorted(f for f in comment_stats.get('fields', []) if _SAFE_NAME.match(f))}")

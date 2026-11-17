@@ -53,7 +53,7 @@ Captions you add to photos in Photos appear under the photo and in the full-scre
 
 ## The site
 - **Opening screen:** your name in large serif type beside a slideshow of
-  recent work (full-bleed behind the name on phones).
+  recent work, each framed print shown whole (above the name on phones).
 - **Stream view:** staggered columns that drift at slightly different speeds
   as you scroll, with photos revealed as they come into view.
 - **Index view:** a dense grid of everything.

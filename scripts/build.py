@@ -122,8 +122,8 @@ def _decode_text(field: dict | None) -> str:
 # Answers "where could a photo's location come from?" without leaking it. The
 # build log is public, so this prints field names, types and counts only:
 # never coordinates, place names, or any other value.
-_LOC_HINT = re.compile(r"loc|gps|lat|lon|geo|place", re.I)
-_SAFE_NAME = re.compile(r"^[A-Za-z_$][\w$.:-]{0,63}$")
+_LOC_HINT = re.compile(r"loc|gps|lat|lon|geo|place|metadata|timezone|keyword", re.I)
+_SAFE_NAME = re.compile(r"^[{A-Za-z_$][\w$.:{} -]{0,63}$")
 
 
 def location_report_enabled() -> bool:
@@ -154,7 +154,9 @@ def _plist_shape(raw: bytes) -> str:
                 walk(v, depth + 1)
 
     walk(obj)
-    return "plist{" + ",".join(sorted(names)[:40]) + "}"
+    gps = obj.get("{GPS}") if isinstance(obj, dict) else None
+    has = isinstance(gps, dict) and "Latitude" in gps and "Longitude" in gps
+    return ("HAS-GPS " if has else "") + "plist{" + ",".join(sorted(names)[:60]) + "}"
 
 
 def _value_shape(v) -> str:

@@ -219,3 +219,14 @@ def test_gps_report_counts_files_with_coordinates(tmp_path):
     im.save(tagged, exif=exif)
     out = build.gps_report([plain, tagged])
     assert out == ["downloaded files with EXIF GPS: 1/2; formats {'JPEG': 2}"]
+
+
+def test_location_report_flags_gps_inside_media_metadata_without_values():
+    import plistlib
+    meta = plistlib.dumps({"{GPS}": {"Latitude": 41.87811, "Longitude": 87.6298, "LatitudeRef": "N"},
+                           "{Exif}": {"LensModel": "Secret Lens"}}, fmt=plistlib.FMT_BINARY)
+    mf = [{"mediaMetaDataEnc": {"value": base64.b64encode(meta).decode(), "type": "ENCRYPTED_BYTES"}}]
+    out = "\n".join(build.location_report([], mf))
+    assert "HAS-GPS" in out and "{GPS}" in out and "Latitude" in out
+    for leak in ("41.87", "87.62", "Secret Lens"):
+        assert leak not in out

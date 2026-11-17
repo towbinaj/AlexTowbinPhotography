@@ -2,7 +2,7 @@ name: Build & deploy site
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/location-check]   # TEMPORARY: remove claude/location-check before merging
   schedule:
     - cron: "17 9 * * *"   # daily, ~4am US Eastern: pick up new album photos
   workflow_dispatch:        # "Run workflow" button for an immediate refresh
@@ -50,7 +50,7 @@ jobs:
         env:
           ICLOUD_ALBUM: ${{ secrets.ICLOUD_ALBUM }}
           SITE_URL: ${{ steps.pages.outputs.base_url }}
-          LOCATION_REPORT: ${{ inputs.location_report && '1' || '' }}
+          LOCATION_REPORT: ${{ (inputs.location_report || github.ref == 'refs/heads/claude/location-check') && '1' || '' }}
         run: python scripts/build.py
 
       - uses: actions/upload-pages-artifact@v3

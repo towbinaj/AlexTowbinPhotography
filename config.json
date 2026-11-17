@@ -1,8 +1,10 @@
 {
+  "name": "Alex Towbin",
   "title": "Alex Towbin Photography",
-  "tagline": "",
+  "tagline": "Street & architecture — light, line, and the city.",
   "instagram": "towbinaj",
   "about": "",
   "sort": "newest-added",
-  "max_photos": 0
+  "max_photos": 0,
+  "trim_white_borders": true
 }

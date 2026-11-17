@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Build the photography site into _site/.
 
-Photos come from an iCloud Shared Album that has "Public Website" turned on.
-The album token (the part after '#' in the share link) is read from the
-ICLOUD_ALBUM_TOKEN environment variable. Without a token, images in photos/
-(if any) are used instead, so the site can also be fed by committing files.
+Photos come from an iCloud shared album. Set ICLOUD_ALBUM to the album's
+public link (or just its token), e.g.
+    https://photos.icloud.com/shared/album/03eXXXXXXXXXXXXXXXXXXXXXX
+Both Apple formats are supported:
+  * new "Shared Collections" links (photos.icloud.com/shared/album/<token>), read
+    through iCloud's public CloudKit endpoints, and
+  * classic shared albums with "Public Website" on (icloud.com/sharedalbum/#B0...).
+Without ICLOUD_ALBUM, images committed to photos/ are used instead.
 
-Every image is re-encoded, which strips all EXIF metadata (including GPS);
+Every image is re-encoded, which strips all metadata (EXIF, GPS, camera info);
 orientation is applied to the pixels first so nothing ends up sideways.
 
 Usage:
@@ -16,20 +20,24 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import html
+import io
 import json
 import os
+import re
 import shutil
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 from PIL import Image, ImageOps
 
-try:  # lets photos/ contain iPhone .HEIC files
+try:  # lets photos/ contain iPhone .HEIC files (and iCloud originals in HEIC)
     from pillow_heif import register_heif_opener
     register_heif_opener()
 except ImportError:
@@ -41,11 +49,11 @@ OUT = ROOT / "_site"
 CACHE = ROOT / ".cache" / "originals"
 LOCAL_PHOTOS = ROOT / "photos"
 
-SIZES = {"thumb": 800, "full": 2048}  # long-edge pixels
-JPEG_QUALITY = 84
+# Long-edge sizes generated for every photo (served via srcset as WebP).
+SIZES = [480, 960, 1600, 2400, 3200]
+WEBP_QUALITY = 80
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".tif", ".tiff"}
-
-BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+UA = "photo-site-builder/1.0"
 
 
 @dataclass
@@ -55,15 +63,155 @@ class Photo:
     caption: str = ""
     taken: str = ""   # ISO date the photo was taken, if known
     added: str = ""   # ISO date it was added to the album
-    extra: dict = field(default_factory=dict)
+
+
+def iso_ms(ms) -> str:
+    try:
+        return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError):
+        return ""
+
+
+def parse_album(value: str) -> str:
+    """Accept a full share URL or a bare token; return the token."""
+    v = value.strip()
+    m = re.search(r"/shared/(?:album|gallery)/([^/?#\s]+)", v)
+    if m:
+        return m.group(1)
+    if "#" in v:
+        v = v.split("#", 1)[1]
+    return v.split(";")[0].strip().strip("/")
+
+
+def _post(session: requests.Session, url: str, payload: dict, params: dict | None = None) -> requests.Response:
+    last: Exception | None = None
+    for attempt in range(4):
+        try:
+            r = session.post(url, params=params, data=json.dumps(payload), timeout=60)
+            if r.status_code < 500:
+                return r
+            last = RuntimeError(f"HTTP {r.status_code} from {url}")
+        except requests.RequestException as e:
+            last = e
+        time.sleep(2 ** attempt)
+    raise RuntimeError(f"iCloud request failed: {last}")
 
 
 # --------------------------------------------------------------------------
-# iCloud Shared Album (undocumented but long-stable "sharedstreams" API)
+# New iCloud "Shared Collections" (photos.icloud.com/shared/album/<token>)
 # --------------------------------------------------------------------------
+
+CK_BASE = "https://ckdatabasews.icloud.com/database/1/com.apple.photos.cloud/production"
+VIDEO_HINTS = ("movie", "mpeg", "video", "avi")
+
+
+def _decode_text(field: dict | None) -> str:
+    """Caption/title fields are base64; skip binary plists."""
+    if not field or not field.get("value"):
+        return ""
+    try:
+        raw = base64.b64decode(field["value"])
+    except Exception:
+        return ""
+    if raw.startswith(b"bplist"):
+        return ""
+    return raw.decode("utf-8", "ignore").strip()
+
+
+def _ck_session(session: requests.Session | None) -> requests.Session:
+    s = session or requests.Session()
+    s.headers.update({"Content-Type": "text/plain", "Origin": "https://photos.icloud.com", "User-Agent": UA})
+    return s
+
+
+def fetch_cloudkit_album(token: str, session: requests.Session | None = None) -> tuple[str, list[dict]]:
+    """Return (album_name, [{checksum, url, caption, taken, added}]) for a shared collection."""
+    s = _ck_session(session)
+    r = _post(s, f"{CK_BASE}/public/records/resolve", {"shortGUIDs": [{"value": token}]},
+              params={"remapEnums": "true", "sharing_url_key": token})
+    r.raise_for_status()
+    results = r.json().get("results") or []
+    if not results or "anonymousPublicAccess" not in results[0]:
+        raise RuntimeError("Album link did not resolve to a public album (is link sharing on?)")
+    res = results[0]
+    access = res["anonymousPublicAccess"]
+    zone = res["zoneID"]
+    name = (((res.get("share") or {}).get("fields") or {}).get("cloudkit.title") or {}).get("value", "")
+    partition = access["databasePartition"].rstrip("/")
+    query_url = f"{partition}/database/1/com.apple.photos.cloud/production/shared/records/query"
+    params = {"remapEnums": "true", "sharing_url_key": token, "publicAccessAuthToken": access["token"]}
+
+    assets: list[dict] = []
+    masters: dict[str, dict] = {}
+    rank = 0
+    for _ in range(1000):  # hard stop; 100 assets per page
+        q = {
+            "query": {
+                "recordType": "CPLAssetAndMasterByAddedDate",
+                "filterBy": [
+                    {"fieldName": "direction", "comparator": "EQUALS",
+                     "fieldValue": {"value": "ASCENDING", "type": "STRING"}},
+                    {"fieldName": "startRank", "comparator": "EQUALS",
+                     "fieldValue": {"value": rank, "type": "INT64"}},
+                ],
+            },
+            "zoneID": zone,
+            "resultsLimit": 200,
+        }
+        r = _post(s, query_url, q, params=params)
+        r.raise_for_status()
+        records = r.json().get("records") or []
+        page_assets = [x for x in records if x.get("recordType") == "CPLAsset"]
+        for x in records:
+            if x.get("recordType") == "CPLMaster":
+                masters[x["recordName"]] = x
+        assets += page_assets
+        if not page_assets:
+            break
+        rank += len(page_assets)
+
+    items = []
+    seen = set()
+    for a in assets:
+        af = a.get("fields") or {}
+        if a["recordName"] in seen:
+            continue
+        seen.add(a["recordName"])
+        if any(int((af.get(k) or {}).get("value") or 0) for k in ("isHidden", "isDeleted", "trashReason")):
+            continue
+        mref = ((af.get("masterRef") or {}).get("value") or {}).get("recordName")
+        mf = (masters.get(mref) or {}).get("fields") or {}
+        item_type = ((mf.get("itemType") or {}).get("value") or "").lower()
+        if any(h in item_type for h in VIDEO_HINTS):
+            continue  # stills only
+        orig_type = ((mf.get("resOriginalFileType") or {}).get("value") or "").lower()
+        candidates = [
+            af.get("resJPEGFullRes"),                     # edited version, if edited in Photos
+            mf.get("resOriginalRes") if any(t in orig_type for t in ("jpeg", "heic", "png", "tiff")) else None,
+            mf.get("resJPEGFullRes"),
+            mf.get("resJPEGMedRes"),
+        ]
+        res = next((c["value"] for c in candidates if c and (c.get("value") or {}).get("downloadURL")), None)
+        if not res:
+            continue
+        items.append({
+            "checksum": res.get("fileChecksum") or res["downloadURL"],
+            "url": res["downloadURL"].replace("${f}", "photo.jpg"),
+            "caption": _decode_text(af.get("captionEnc")) or _decode_text(af.get("titleEnc")),
+            "taken": iso_ms((af.get("assetDate") or {}).get("value")),
+            "added": iso_ms((af.get("addedDate") or {}).get("value")),
+        })
+    return name, items
+
+
+# --------------------------------------------------------------------------
+# Classic iCloud Shared Album with "Public Website" (icloud.com/sharedalbum/#B0...)
+# --------------------------------------------------------------------------
+
+BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
 
 def icloud_base_url(token: str) -> str:
-    """Initial server for a token; iCloud may redirect us to another one."""
     if token[0] == "A":
         partition = BASE62.index(token[1])
     else:
@@ -71,38 +219,21 @@ def icloud_base_url(token: str) -> str:
     return f"https://p{partition:02d}-sharedstreams.icloud.com/{token}/sharedstreams/"
 
 
-def _post(session: requests.Session, url: str, payload: dict) -> requests.Response:
-    for attempt in range(4):
-        try:
-            r = session.post(url, json=payload, timeout=60)
-            if r.status_code < 500:
-                return r
-        except requests.RequestException:
-            if attempt == 3:
-                raise
-        time.sleep(2 ** attempt)
-    r.raise_for_status()
-    return r
-
-
-def fetch_icloud_album(token: str, session: requests.Session | None = None) -> tuple[str, list[dict]]:
-    """Return (album_name, [{guid, caption, taken, added, url, checksum}])."""
-    session = session or requests.Session()
-    session.headers.update({"Content-Type": "text/plain", "User-Agent": "photo-site-builder"})
+def fetch_sharedstream_album(token: str, session: requests.Session | None = None) -> tuple[str, list[dict]]:
+    s = session or requests.Session()
+    s.headers.update({"Content-Type": "text/plain", "User-Agent": UA})
     base = icloud_base_url(token)
-
-    r = _post(session, base + "webstream", {"streamCtag": None})
+    r = _post(s, base + "webstream", {"streamCtag": None})
     if r.status_code == 330:  # "wrong partition, use this host instead"
-        host = r.json()["X-Apple-MMe-Host"]
-        base = f"https://{host}/{token}/sharedstreams/"
-        r = _post(session, base + "webstream", {"streamCtag": None})
+        base = f"https://{r.json()['X-Apple-MMe-Host']}/{token}/sharedstreams/"
+        r = _post(s, base + "webstream", {"streamCtag": None})
     r.raise_for_status()
     stream = r.json()
 
-    wanted: list[dict] = []
+    wanted = []
     for p in stream.get("photos", []):
         if p.get("mediaAssetType") == "video":
-            continue  # stills only
+            continue
         best = None
         for key, d in (p.get("derivatives") or {}).items():
             if not key.isdigit() or not d.get("checksum"):
@@ -110,47 +241,71 @@ def fetch_icloud_album(token: str, session: requests.Session | None = None) -> t
             size = int(d.get("width") or 0) * int(d.get("height") or 0) or int(key)
             if best is None or size > best[0]:
                 best = (size, d)
-        if best is None:
-            continue
-        wanted.append({
-            "guid": p["photoGuid"],
-            "caption": (p.get("caption") or "").strip(),
-            "taken": p.get("dateCreated") or "",
-            "added": p.get("batchDateCreated") or p.get("dateCreated") or "",
-            "checksum": best[1]["checksum"],
-        })
+        if best:
+            wanted.append({"guid": p["photoGuid"], "checksum": best[1]["checksum"],
+                           "caption": (p.get("caption") or "").strip(),
+                           "taken": p.get("dateCreated") or "",
+                           "added": p.get("batchDateCreated") or p.get("dateCreated") or ""})
 
-    # Resolve download URLs (they expire, so we always download, never hotlink).
     urls: dict[str, str] = {}
     guids = [w["guid"] for w in wanted]
     for i in range(0, len(guids), 25):
-        r = _post(session, base + "webasseturls", {"photoGuids": guids[i:i + 25]})
+        r = _post(s, base + "webasseturls", {"photoGuids": guids[i:i + 25]})
         r.raise_for_status()
-        for checksum, item in (r.json().get("items") or {}).items():
-            urls[checksum] = f"https://{item['url_location']}{item['url_path']}"
+        body = r.json()
+        locations = body.get("locations") or {}
+        for checksum, item in (body.get("items") or {}).items():
+            loc = locations.get(item["url_location"]) or {}
+            host = (loc.get("hosts") or [item["url_location"]])[0]
+            urls[checksum] = f"{loc.get('scheme', 'https')}://{host}{item['url_path']}"
     for w in wanted:
         w["url"] = urls.get(w["checksum"])
     return stream.get("streamName", ""), [w for w in wanted if w["url"]]
 
 
-def download_icloud(token: str) -> list[Photo]:
-    album, items = fetch_icloud_album(token)
-    print(f"iCloud album {album!r}: {len(items)} photos")
+# --------------------------------------------------------------------------
+# Download (with cache) + other sources
+# --------------------------------------------------------------------------
+
+def download_album(token: str) -> list[Photo]:
+    if token[:1].isdigit():
+        name, items = fetch_cloudkit_album(token)
+    else:
+        try:
+            name, items = fetch_sharedstream_album(token)
+        except Exception as legacy_err:  # maybe a newer-style token after all
+            try:
+                name, items = fetch_cloudkit_album(token)
+            except Exception:
+                raise legacy_err
+    print(f"iCloud album {name!r}: {len(items)} photos")
+
     CACHE.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
+    session.headers["User-Agent"] = UA
     photos = []
     for it in items:
-        safe = hashlib.sha1(it["checksum"].encode()).hexdigest()[:16]
-        dest = CACHE / f"{safe}.img"
+        pid = hashlib.sha1(it["checksum"].encode()).hexdigest()[:12]
+        dest = CACHE / f"{pid}.img"
         if not dest.exists():
-            r = session.get(it["url"], timeout=120)
-            r.raise_for_status()
-            tmp = dest.with_suffix(".part")
-            tmp.write_bytes(r.content)
-            tmp.replace(dest)
-        photos.append(Photo(id=safe, source=dest, caption=it["caption"],
-                            taken=it["taken"], added=it["added"]))
-    # Drop cached originals for photos no longer in the album.
+            for attempt in range(3):
+                try:
+                    with session.get(it["url"], timeout=180, stream=True) as r:
+                        r.raise_for_status()
+                        tmp = dest.with_suffix(".part")
+                        with open(tmp, "wb") as f:
+                            for chunk in r.iter_content(1 << 20):
+                                f.write(chunk)
+                        tmp.replace(dest)
+                    break
+                except requests.RequestException as e:
+                    if attempt == 2:
+                        print(f"  could not download a photo: {e}", file=sys.stderr)
+                    time.sleep(2 ** attempt)
+            if not dest.exists():
+                continue
+        photos.append(Photo(id=pid, source=dest, caption=it["caption"], taken=it["taken"], added=it["added"]))
+
     keep = {p.source.name for p in photos}
     for f in CACHE.glob("*.img"):
         if f.name not in keep:
@@ -158,19 +313,15 @@ def download_icloud(token: str) -> list[Photo]:
     return photos
 
 
-# --------------------------------------------------------------------------
-# Other sources
-# --------------------------------------------------------------------------
-
 def local_photos() -> list[Photo]:
     if not LOCAL_PHOTOS.is_dir():
         return []
     photos = []
     for f in sorted(LOCAL_PHOTOS.iterdir()):
         if f.suffix.lower() in IMAGE_EXTS:
-            mtime = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(f.stat().st_mtime))
-            pid = hashlib.sha1(f.name.encode()).hexdigest()[:16]
-            photos.append(Photo(id=pid, source=f, caption="", taken=mtime, added=mtime))
+            mtime = iso_ms(f.stat().st_mtime * 1000)
+            pid = hashlib.sha1(f.name.encode()).hexdigest()[:12]
+            photos.append(Photo(id=pid, source=f, taken=mtime, added=mtime))
     return photos
 
 
@@ -182,15 +333,15 @@ def demo_photos(n: int) -> list[Photo]:
     d.mkdir(parents=True, exist_ok=True)
     photos = []
     for i in range(n):
-        w, h = rnd.choice([(3000, 2000), (2000, 3000), (3000, 3000), (3600, 1800), (2400, 3000)])
-        f = d / f"demo{i:02d}.jpg"
+        w, h = rnd.choice([(3000, 4000)] * 5 + [(4000, 3000), (3000, 3000)])
+        f = d / f"demo{i:02d}-{w}x{h}.jpg"
         if not f.exists():
             c1 = tuple(rnd.randint(20, 235) for _ in range(3))
             c2 = tuple(rnd.randint(20, 235) for _ in range(3))
             grad = Image.linear_gradient("L").resize((w, h))
             Image.composite(Image.new("RGB", (w, h), c1), Image.new("RGB", (w, h), c2), grad).save(f, quality=80)
         photos.append(Photo(id=f"demo{i:02d}", source=f, caption=f"Placeholder {i + 1}",
-                            taken=f"2026-01-{i % 28 + 1:02d}", added=f"2026-02-{i % 28 + 1:02d}"))
+                            taken=f"2026-0{i % 9 + 1}-01T00:00:00Z", added=f"2026-10-{i % 28 + 1:02d}T00:00:00Z"))
     return photos
 
 
@@ -198,24 +349,60 @@ def demo_photos(n: int) -> list[Photo]:
 # Image processing + site output
 # --------------------------------------------------------------------------
 
-def render_images(photo: Photo, out_dir: Path) -> dict | None:
+def trim_white_border(im: Image.Image, threshold: int = 232) -> Image.Image:
+    """Crop a uniform white frame (e.g. an Instagram-style border) off a photo.
+
+    Only trims when *every* side has a clean near-white margin of 0.4%-20% of
+    the image, so photos that merely have a bright sky at one edge are left alone.
+    """
+    w, h = im.size
+    gray = im.convert("L")
+    small = gray.reduce(4) if min(w, h) > 400 else gray
+    f = w / small.width
+    mask = small.point(lambda v: 255 if v < threshold else 0)
+    box = mask.getbbox()
+    if not box:
+        return im
+    l, t, r, b = box[0] * f, box[1] * f, w - box[2] * f, h - box[3] * f
+    lo_w, lo_h = 0.004 * w, 0.004 * h
+    if not (lo_w <= l <= 0.2 * w and lo_w <= r <= 0.2 * w and lo_h <= t <= 0.2 * h and lo_h <= b <= 0.2 * h):
+        return im
+    inset = 2 * f  # shave the soft edge where frame meets photo
+    crop = (round(l + inset), round(t + inset), round(w - r - inset), round(h - b - inset))
+    return im.crop(crop)
+
+
+def render_images(photo: Photo, out_dir: Path, trim: bool = True) -> dict | None:
     try:
         with Image.open(photo.source) as im:
-            im = ImageOps.exif_transpose(im)  # bake rotation in, then drop EXIF
+            if im.format == "JPEG":
+                im.draft("RGB", (SIZES[-1], SIZES[-1]))  # fast DCT downscale for huge originals
+            im = ImageOps.exif_transpose(im)  # bake rotation in; metadata is dropped on save
             im = im.convert("RGB")
+            if trim:
+                im = trim_white_border(im)
             w, h = im.size
-            entry = {"id": photo.id, "w": w, "h": h, "caption": photo.caption,
-                     "taken": photo.taken, "added": photo.added}
-            for name, edge in SIZES.items():
+            srcs = []
+            for edge in SIZES:
                 scale = min(1.0, edge / max(w, h))
                 size = (max(1, round(w * scale)), max(1, round(h * scale)))
+                if srcs and size[0] <= srcs[-1]["w"]:
+                    break  # source is smaller than this step; don't upscale
                 img = im if scale == 1.0 else im.resize(size, Image.LANCZOS)
-                rel = f"img/{photo.id}-{name}.jpg"
-                img.save(out_dir / rel, "JPEG", quality=JPEG_QUALITY, optimize=True,
-                         progressive=True)  # no exif= → metadata stripped
-                entry[name] = rel
-                entry[f"{name}_w"], entry[f"{name}_h"] = size
-            return entry
+                rel = f"img/{photo.id}-{size[0]}.webp"
+                img.save(out_dir / rel, "WEBP", quality=WEBP_QUALITY, method=5)
+                srcs.append({"w": size[0], "h": size[1], "url": rel})
+
+            # Tiny blurred placeholder shown while the real image loads.
+            tiny = im.copy()
+            tiny.thumbnail((24, 24))
+            buf = io.BytesIO()
+            tiny.save(buf, "WEBP", quality=40)
+            lqip = "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+
+            return {"id": photo.id, "w": w, "h": h, "caption": photo.caption,
+                    "taken": photo.taken, "added": photo.added, "lqip": lqip, "src": srcs,
+                    "_im": im}
     except Exception as e:  # one bad file shouldn't sink the whole site
         print(f"  skipping {photo.source.name}: {e}", file=sys.stderr)
         return None
@@ -223,8 +410,8 @@ def render_images(photo: Photo, out_dir: Path) -> dict | None:
 
 def sort_photos(photos: list[Photo], mode: str) -> list[Photo]:
     keys = {
-        "newest-added": (lambda p: p.added, True),
-        "oldest-added": (lambda p: p.added, False),
+        "newest-added": (lambda p: (p.added[:16], p.taken), True),   # minute precision, then taken date
+        "oldest-added": (lambda p: (p.added[:16], p.taken), False),
         "newest-taken": (lambda p: p.taken, True),
         "oldest-taken": (lambda p: p.taken, False),
     }
@@ -242,21 +429,32 @@ def build(photos: list[Photo], config: dict) -> None:
     if config.get("max_photos"):
         photos = photos[: int(config["max_photos"])]
 
-    entries = [e for p in photos if (e := render_images(p, OUT))]
-    (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
-    (OUT / "config.json").write_text(json.dumps(config))
+    entries = []
+    og_written = False
+    for p in photos:
+        e = render_images(p, OUT, trim=config.get("trim_white_borders", True))
+        if not e:
+            continue
+        im = e.pop("_im")
+        if not og_written:  # social-preview image (JPEG for widest compatibility)
+            og = im.copy()
+            og.thumbnail((1200, 1200))
+            og.save(OUT / "img" / "og.jpg", "JPEG", quality=82)
+            og_written = True
+        entries.append(e)
 
-    # Put title/description into the HTML too, for search engines and link previews.
-    index = OUT / "index.html"
+    (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
+    cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    (OUT / "config.json").write_text(json.dumps(cfg))
+
+    site_url = os.environ.get("SITE_URL", "").rstrip("/")
     title = html.escape(config.get("title", "Photography"))
     desc = html.escape(config.get("tagline") or config.get("title", ""))
-    site_url = os.environ.get("SITE_URL", "").rstrip("/")
-    og_image = f"{site_url}/{entries[0]['thumb']}" if entries else ""
-    text = (index.read_text()
-            .replace("{{TITLE}}", title)
-            .replace("{{DESCRIPTION}}", desc)
-            .replace("{{OG_IMAGE}}", og_image))
-    index.write_text(text)
+    index = OUT / "index.html"
+    index.write_text(index.read_text()
+                     .replace("{{TITLE}}", title)
+                     .replace("{{DESCRIPTION}}", desc)
+                     .replace("{{OG_IMAGE}}", f"{site_url}/img/og.jpg" if og_written else ""))
     (OUT / ".nojekyll").write_text("")
     print(f"Built {len(entries)} photos into {OUT}")
 
@@ -267,19 +465,20 @@ def main() -> int:
     args = ap.parse_args()
 
     config = json.loads((ROOT / "config.json").read_text())
-    token = os.environ.get("ICLOUD_ALBUM_TOKEN", "").strip().lstrip("#").split(";")[0]
+    album = os.environ.get("ICLOUD_ALBUM") or os.environ.get("ICLOUD_ALBUM_TOKEN") or ""
+    token = parse_album(album) if album.strip() else ""
 
     if args.demo:
         photos = demo_photos(args.demo)
     elif token:
-        photos = download_icloud(token)
+        photos = download_album(token)
         if not photos:
             # Fail loudly rather than publish an empty site over a good one.
             print("iCloud returned no photos; refusing to deploy an empty gallery.", file=sys.stderr)
             return 1
     else:
         photos = local_photos()
-        print(f"No ICLOUD_ALBUM_TOKEN set; using {len(photos)} photos from photos/")
+        print(f"No ICLOUD_ALBUM set; using {len(photos)} photos from photos/")
 
     build(photos, config)
     return 0

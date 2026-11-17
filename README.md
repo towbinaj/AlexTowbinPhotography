@@ -1,6 +1,6 @@
 # Alex Towbin Photography
 
-A photography portfolio that updates itself from an iCloud Shared Album and is
+A photography portfolio that updates itself from an iCloud shared album and is
 hosted free on GitHub Pages at **https://towbinaj.github.io/AlexTowbinPhotography/**.
 
 **To add or remove a photo, add it to (or remove it from) the shared album in
@@ -9,23 +9,29 @@ right away, go to *Actions → Build & deploy site → Run workflow*.
 
 ## How it works
 1. A scheduled GitHub Action (`.github/workflows/deploy.yml`) runs `scripts/build.py`.
-2. The script reads the iCloud Shared Album (the album must have **Public Website**
-   turned on) and downloads the photos. Each image is resized to a thumbnail
-   (800px) and a full view (2048px) and re-encoded. Re-encoding strips **all
-   metadata, including GPS location**.
-3. The static site in `site/` plus the processed images are deployed to Pages.
+2. The script reads the shared album through iCloud's public web endpoints, the
+   same ones photos.icloud.com uses. It downloads full-resolution originals, or
+   your edited version if you edited a photo in Photos. Videos are skipped.
+3. Each photo is:
+   - **trimmed** of any uniform white frame (e.g. from an Instagram export),
+   - **resized** to several WebP sizes (480 → 3200 px) so each screen gets a
+     sharp image without downloading more than it needs,
+   - **re-encoded**, which strips **all metadata, including GPS location**.
+4. The static site in `site/` plus the processed images are deployed to Pages.
    Photos are never committed to the repo.
 
 If iCloud is unreachable or returns an empty album, the build fails and the
 site keeps showing the last good version. GitHub emails you about failed runs.
 
 ## One-time setup
-1. **Shared album:** in Photos, create a Shared Album (e.g. "Portfolio"). In
-   the album's settings, turn on **Public Website** and copy the link. It looks
-   like `https://www.icloud.com/sharedalbum/#B0aBcDeFgHiJkL`.
+1. **Album link:** in Photos, open the shared album, turn on sharing by link,
+   and copy the link (e.g. `https://photos.icloud.com/shared/album/03e…`).
+   **Make the link view-only.** If anyone with the link can add photos, anyone
+   who gets the link can put photos on your website.
 2. **Secret:** in this repo go to *Settings → Secrets and variables → Actions →
-   New repository secret*. Name it `ICLOUD_ALBUM_TOKEN` and set the value to
-   the part after `#` (e.g. `B0aBcDeFgHiJkL`).
+   New repository secret*. Name it `ICLOUD_ALBUM` and paste the whole link as
+   the value. The link stays private this way: it is never written into the
+   public repo or the site.
 3. **Pages:** go to *Settings → Pages → Build and deployment → Source* and
    choose **GitHub Actions**.
 4. Run the workflow once (*Actions → Build & deploy site → Run workflow*).
@@ -35,26 +41,35 @@ Edit `config.json`:
 
 | key | meaning |
 |---|---|
-| `title` | site name in the header and browser tab |
-| `tagline` | optional one-line intro under the header |
-| `instagram` | Instagram handle, used for the header and footer links |
-| `about` | optional About text (line breaks are kept); the About link only shows if this is set |
+| `name` | your name, shown large on the opening screen and in the header |
+| `title` | browser tab / search / link-preview title |
+| `tagline` | one line under your name |
+| `instagram` | Instagram handle, used for the nav link and the footer banner |
+| `about` | optional About text (line breaks kept); the About section only appears if set |
 | `sort` | `newest-added` (default), `oldest-added`, `newest-taken`, or `oldest-taken` |
 | `max_photos` | `0` for all, or a number to cap the gallery |
+| `trim_white_borders` | `true` (default) crops uniform white frames off photos |
 
-Captions you add to photos in the shared album appear in the lightbox.
+Captions you add to photos in Photos appear under the photo and in the full-screen view.
 
-Notes:
-- Only still photos are used. Videos in the album are skipped.
-- Without the secret, the build uses any images committed to a `photos/`
-  folder instead (JPEG/PNG/HEIC).
-- The album is read through iCloud's public shared-album web feed. Apple
-  doesn't document it, but it has been stable for many years.
+## The site
+- **Opening screen:** your name in large serif type beside a slideshow of
+  recent work (full-bleed behind the name on phones).
+- **Stream view:** staggered columns that drift at slightly different speeds
+  as you scroll, with photos revealed as they come into view.
+- **Index view:** a dense grid of everything.
+- **Full-screen viewer:** the photo grows smoothly from its spot in the
+  gallery (View Transitions). Use arrow keys or swipe to move between photos,
+  swipe down to close. Each photo has its own shareable link (`#photo-…`).
+- **Loading and polish:** a blurred preview shows instantly while each image
+  loads, plus subtle film grain and a custom cursor on desktop.
+- **Accessibility:** motion is turned off for visitors who ask for reduced
+  motion.
 
 ## Local preview
 ```
-pip install -r requirements.txt
-python scripts/build.py --demo 30     # placeholder images (or set ICLOUD_ALBUM_TOKEN)
-python -m http.server -d _site 8000   # open http://localhost:8000
+pip install -r requirements.txt pytest
+ICLOUD_ALBUM='<album link>' python scripts/build.py   # or: --demo 30 for placeholders
+python -m http.server -d _site 8000                   # open http://localhost:8000
 python -m pytest -q tests
 ```

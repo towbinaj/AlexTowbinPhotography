@@ -118,6 +118,100 @@ def _decode_text(field: dict | None) -> str:
     return raw.decode("utf-8", "ignore").strip()
 
 
+# --- location report (diagnostic, LOCATION_REPORT=1) ------------------------
+# Answers "where could a photo's location come from?" without leaking it. The
+# build log is public, so this prints field names, types and counts only:
+# never coordinates, place names, or any other value.
+_LOC_HINT = re.compile(r"loc|gps|lat|lon|geo|place", re.I)
+_SAFE_NAME = re.compile(r"^[A-Za-z_$][\w$.:-]{0,63}$")
+
+
+def location_report_enabled() -> bool:
+    return os.environ.get("LOCATION_REPORT", "").strip().lower() in ("1", "true", "yes")
+
+
+def _plist_shape(raw: bytes) -> str:
+    """Describe a binary plist by its dict keys and archived class names only."""
+    import plistlib
+    try:
+        obj = plistlib.loads(raw)
+    except Exception:
+        return "binary plist (unreadable)"
+    names: set[str] = set()
+
+    def walk(o, depth=0):
+        if depth > 8:
+            return
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if isinstance(k, str) and _SAFE_NAME.match(k):
+                    names.add(k)
+                if k == "$classname" and isinstance(v, str) and _SAFE_NAME.match(v):
+                    names.add("class:" + v)
+                walk(v, depth + 1)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v, depth + 1)
+
+    walk(obj)
+    return "plist{" + ",".join(sorted(names)[:40]) + "}"
+
+
+def _value_shape(v) -> str:
+    if isinstance(v, dict):
+        return "object{" + ",".join(sorted(k for k in v if isinstance(k, str) and _SAFE_NAME.match(k))) + "}"
+    if isinstance(v, bool) or isinstance(v, (int, float)):
+        return "number"
+    if isinstance(v, str):
+        try:
+            raw = base64.b64decode(v, validate=True)
+        except Exception:
+            return "string"
+        if raw.startswith(b"bplist"):
+            return _plist_shape(raw)
+        try:
+            raw.decode("utf-8")
+            return "base64 text"
+        except UnicodeDecodeError:
+            return f"base64 binary ({len(raw)} bytes)"
+    return type(v).__name__
+
+
+def location_report(asset_fields: list[dict], master_fields: list[dict]) -> list[str]:
+    """Summarize which record fields might hold a location. Names/types/counts only."""
+    from collections import Counter
+    lines = []
+    for label, rows in (("CPLAsset", asset_fields), ("CPLMaster", master_fields)):
+        names = sorted({k for f in rows for k in f if isinstance(k, str) and _SAFE_NAME.match(k)})
+        lines.append(f"{label} fields across {len(rows)} records: {', '.join(names)}")
+        for n in names:
+            if not _LOC_HINT.search(n):
+                continue
+            present = [f[n] for f in rows if isinstance(f.get(n), dict) and f[n].get("value") not in (None, "")]
+            types = Counter(str(x.get("type", "?")) for x in present)
+            shapes = Counter(_value_shape(x.get("value")) for x in present)
+            lines.append(f"  {label}.{n}: set on {len(present)}/{len(rows)}; "
+                         f"types {dict(types)}; shapes {dict(shapes)}")
+    return lines
+
+
+def gps_report(paths: list[Path]) -> list[str]:
+    """Count downloaded files that carry EXIF GPS coordinates (yes/no only)."""
+    from collections import Counter
+    has, total, fmts = 0, 0, Counter()
+    for p in paths:
+        total += 1
+        try:
+            with Image.open(p) as im:
+                fmts[im.format or "?"] += 1
+                gps = im.getexif().get_ifd(0x8825)
+                if gps.get(2) and gps.get(4):  # GPSLatitude and GPSLongitude
+                    has += 1
+        except Exception:
+            fmts["unreadable"] += 1
+    return [f"downloaded files with EXIF GPS: {has}/{total}; formats {dict(fmts)}"]
+
+
 def _ck_session(session: requests.Session | None) -> requests.Session:
     s = session or requests.Session()
     s.headers.update({"Content-Type": "text/plain", "Origin": "https://photos.icloud.com", "User-Agent": UA})
@@ -174,6 +268,8 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
     items = []
     seen = set()
     not_owner = 0
+    published_af: list[dict] = []
+    published_mf: list[dict] = []
     for a in assets:
         af = a.get("fields") or {}
         if a["recordName"] in seen:
@@ -198,18 +294,29 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
             mf.get("resJPEGFullRes"),
             mf.get("resJPEGMedRes"),
         ]
-        res = next((c["value"] for c in candidates if c and (c.get("value") or {}).get("downloadURL")), None)
-        if not res:
+        pick = next((i for i, c in enumerate(candidates) if c and (c.get("value") or {}).get("downloadURL")), None)
+        if pick is None:
             continue
+        res = candidates[pick]["value"]
+        published_af.append(af)
+        published_mf.append(mf)
         items.append({
             "checksum": res.get("fileChecksum") or res["downloadURL"],
             "url": res["downloadURL"].replace("${f}", "photo.jpg"),
             "caption": _decode_text(af.get("captionEnc")) or _decode_text(af.get("titleEnc")),
             "taken": iso_ms((af.get("assetDate") or {}).get("value")),
             "added": iso_ms((af.get("addedDate") or {}).get("value")),
+            "source": ("edited", "original", "jpeg-full", "jpeg-medium")[pick],
         })
     if not_owner:
         print(f"  ignored {not_owner} photo(s) added by someone other than the album owner")
+    if location_report_enabled():
+        from collections import Counter
+        print("Location report (field names, types and counts only):")
+        for line in location_report(published_af, published_mf):
+            print("  " + line)
+        print(f"  image source used: {dict(Counter(i['source'] for i in items))}")
+        print(f"  photos with a caption/title: {sum(1 for i in items if i['caption'])}/{len(items)}")
     return name, items
 
 
@@ -314,6 +421,10 @@ def download_album(token: str) -> list[Photo]:
             if not dest.exists():
                 continue
         photos.append(Photo(id=pid, source=dest, caption=it["caption"], taken=it["taken"], added=it["added"]))
+
+    if location_report_enabled():
+        for line in gps_report([p.source for p in photos]):
+            print("  " + line)
 
     keep = {p.source.name for p in photos}
     for f in CACHE.glob("*.img"):

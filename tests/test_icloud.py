@@ -188,3 +188,34 @@ def test_json_ld_is_safe_and_credits_holder():
     assert img["creator"]["name"] == "Test Person" and img["copyrightNotice"] == r["notice"]
     assert img["contentUrl"] == "https://example.org/site/img/a-2.webp"
     assert img["license"] == "https://example.org/site/#rights"
+
+
+# ---- location report: must describe shape only, never leak values ----
+
+def test_location_report_shows_names_and_counts_but_no_values():
+    import plistlib
+    secret_place = "Secret Street 12"
+    archived = plistlib.dumps({"$objects": ["$null", {"$classname": "CLLocation"}, secret_place, 41.87811],
+                               "$top": {"root": 1}}, fmt=plistlib.FMT_BINARY)
+    af = [{"locationEnc": {"value": base64.b64encode(archived).decode(), "type": "ENCRYPTED_BYTES"},
+           "captionEnc": {"value": base64.b64encode(b"Pantheon").decode()}},
+          {"captionEnc": {"value": base64.b64encode(b"Other").decode()}}]
+    mf = [{"location": {"value": {"latitude": 41.87811, "longitude": -87.62980}, "type": "LOCATION"}}]
+    out = "\n".join(build.location_report(af, mf))
+    assert "CPLAsset.locationEnc: set on 1/2" in out
+    assert "class:CLLocation" in out
+    assert "CPLMaster.location: set on 1/1" in out and "latitude" in out
+    for leak in (secret_place, "41.87", "87.62", "Pantheon"):
+        assert leak not in out
+
+
+def test_gps_report_counts_files_with_coordinates(tmp_path):
+    plain = tmp_path / "plain.jpg"
+    Image.new("RGB", (8, 8)).save(plain)
+    tagged = tmp_path / "tagged.jpg"
+    im = Image.new("RGB", (8, 8))
+    exif = im.getexif()
+    exif.get_ifd(0x8825).update({1: "N", 2: (41.0, 52.0, 41.0), 3: "W", 4: (87.0, 37.0, 47.0)})
+    im.save(tagged, exif=exif)
+    out = build.gps_report([plain, tagged])
+    assert out == ["downloaded files with EXIF GPS: 1/2; formats {'JPEG': 2}"]

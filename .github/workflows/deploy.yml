@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "17 9 * * *"   # daily, ~4am US Eastern: pick up new album photos
   workflow_dispatch:        # "Run workflow" button for an immediate refresh
+    inputs:
+      location_report:
+        description: "Also print a location-data report (field names and counts only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -45,6 +50,7 @@ jobs:
         env:
           ICLOUD_ALBUM: ${{ secrets.ICLOUD_ALBUM }}
           SITE_URL: ${{ steps.pages.outputs.base_url }}
+          LOCATION_REPORT: ${{ inputs.location_report && '1' || '' }}
         run: python scripts/build.py
 
       - uses: actions/upload-pages-artifact@v3
@@ -53,6 +59,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'   # runs started on other branches build only
     runs-on: ubuntu-latest
     environment:
       name: github-pages

@@ -52,7 +52,17 @@ Edit `config.json`:
 | `copyright_start_year` | first year of the notice, e.g. `2026` → "© 2026–2027 …" in later years |
 | `trim_white_borders` | `false` (default) keeps photos exactly as framed; `true` crops uniform white borders |
 
-Captions you add to photos in Photos appear under the photo and in the full-screen view.
+### Photo titles
+A title appears under the photo and in the full-screen view. To give a photo
+one, **add it to the shared album by itself and type the title in the text box
+while adding it.** If several photos are added together, their shared text is
+not used, so one caption never lands on a whole batch. Only text you type
+counts, not text typed by people who joined the album. If a photo has no
+title, the site shows the month it was taken.
+
+Captions set in your Photos library don't carry over into shared albums, and
+comments on a photo inside the album aren't visible through the public link,
+so neither one can be used for titles.
 
 ## The site
 - **Opening screen:** your name in large serif type beside a slideshow of

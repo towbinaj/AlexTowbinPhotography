@@ -265,6 +265,11 @@ def fetch_owner_comments(s, changes_url: str, params: dict, zone: dict, owner: s
             if rt == "CPLPost":
                 pf = x.get("fields") or {}
                 stats.setdefault("post_fields", set()).update(pf.keys())
+                by_owner = (x.get("created") or {}).get("userRecordName") == owner
+                shape = _value_shape((pf.get("caption") or {}).get("value")) if pf.get("caption") else "none"
+                key = f"{'owner' if by_owner else 'other'}:{(pf.get('caption') or {}).get('type', '-')}:{shape}"
+                shapes = stats.setdefault("post_caption_shapes", {})
+                shapes[key] = shapes.get(key, 0) + 1
                 if (x.get("created") or {}).get("userRecordName") == owner:
                     v = (pf.get("caption") or {}).get("value")
                     text = v.strip() if isinstance(v, str) else _decode_text(pf.get("captionEnc"))
@@ -436,6 +441,7 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
               f"{comment_stats.get('photos_with_owner_comment', 0)} photo(s) with an owner comment; "
               f"errors {comment_stats.get('errors', 0)} {sorted(comment_stats.get('error_codes', []))}; "
               f"fields {sorted(f for f in comment_stats.get('fields', []) if _SAFE_NAME.match(f))}")
+        print(f"  post caption kinds (who:type:shape): {comment_stats.get('post_caption_shapes', {})}")
         print(f"  post lookup: {post_stats.get('post_records', 0)} post record(s); "
               f"{post_stats.get('owner_posts_with_caption', 0)} owner post(s) with a caption; "
               f"published photos per captioned post {post_stats.get('batch_sizes_with_caption', [])}; "

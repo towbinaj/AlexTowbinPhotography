@@ -23,6 +23,7 @@
   function makeImg(p, sizes, eager) {
     const img = new Image();
     img.decoding = "async";
+    img.draggable = false;
     if (!eager) img.loading = "lazy";
     img.alt = p.caption || "";
     img.width = p.w; img.height = p.h;
@@ -39,8 +40,11 @@
   function applyConfig(cfg) {
     const name = cfg.name || (cfg.title || "Photography").replace(/\s+Photography$/i, "");
     $("bar-name").textContent = name;
-    $("footer-name").textContent = name;
-    $("year").textContent = new Date().getFullYear();
+    const r = cfg.rights || { holder: name, notice: `© ${new Date().getFullYear()} ${name}. All rights reserved.`, terms: "" };
+    $("footer-notice").textContent = r.notice;
+    $("rights-notice").textContent = r.notice;
+    $("rights-terms").textContent = r.terms;
+    $("lb-credit").textContent = `© ${r.holder}`;
     if (cfg.built) $("footer-updated").textContent = "Updated " + monthYear(cfg.built + "T12:00:00Z");
 
     const h1 = $("hero-name");
@@ -56,6 +60,12 @@
       const handle = cfg.instagram.replace(/^@/, "");
       const url = `https://www.instagram.com/${encodeURIComponent(handle)}/`;
       for (const a of [$("nav-insta"), $("marquee")]) { a.href = url; a.hidden = false; }
+      const contact = $("rights-contact");
+      contact.append("For licensing, prints, or permission to use an image, message ");
+      const link = document.createElement("a");
+      link.href = url; link.target = "_blank"; link.rel = "noopener"; link.textContent = "@" + handle;
+      contact.append(link, " on Instagram.");
+      contact.hidden = false;
       const track = $("marquee-track");
       const item = () => {
         const d = document.createElement("div"); d.className = "marquee-item";
@@ -304,7 +314,10 @@
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.2) step(dx < 0 ? 1 : -1);
     else if (dy > 90 && Math.abs(dy) > Math.abs(dx) * 1.5) closePhoto(); // swipe down to close
   });
-  document.addEventListener("contextmenu", (e) => { if (e.target.tagName === "IMG") e.preventDefault(); });
+  // Discourage casual saving: no right-click menu or dragging on photos.
+  const guarded = (t) => t && t.closest && (t.tagName === "IMG" || t.closest(".ph, .hero-media, .lb-stage"));
+  document.addEventListener("contextmenu", (e) => { if (guarded(e.target)) e.preventDefault(); });
+  document.addEventListener("dragstart", (e) => { if (guarded(e.target)) e.preventDefault(); });
 
   // ---------------- boot ----------------
   let lastW = 0, rt;

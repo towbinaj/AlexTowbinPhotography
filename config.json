@@ -6,5 +6,7 @@
   "about": "",
   "sort": "newest-added",
   "max_photos": 0,
-  "trim_white_borders": false
+  "trim_white_borders": false,
+  "copyright_holder": "Alex Towbin",
+  "copyright_start_year": 2026
 }

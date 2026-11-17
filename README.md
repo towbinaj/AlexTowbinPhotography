@@ -47,6 +47,8 @@ Edit `config.json`:
 | `about` | optional About text (line breaks kept); the About section only appears if set |
 | `sort` | `newest-added` (default), `oldest-added`, `newest-taken`, or `oldest-taken` |
 | `max_photos` | `0` for all, or a number to cap the gallery |
+| `copyright_holder` | name in the copyright notice (defaults to `name`) |
+| `copyright_start_year` | first year of the notice, e.g. `2026` → "© 2026–2027 …" in later years |
 | `trim_white_borders` | `false` (default) keeps photos exactly as framed; `true` crops uniform white borders |
 
 Captions you add to photos in Photos appear under the photo and in the full-screen view.
@@ -64,6 +66,30 @@ Captions you add to photos in Photos appear under the photo and in the full-scre
   loads, plus subtle film grain and a custom cursor on desktop.
 - **Accessibility:** motion is turned off for visitors who ask for reduced
   motion.
+
+## Copyright protection
+- **On the page:** "© <years> <name>. All rights reserved." appears in the footer,
+  in a Copyright section with usage terms and a licensing contact, and on every
+  photo in the full-screen view.
+- **In the page metadata:** `author` / `copyright` / `dcterms.rights` meta tags,
+  plus schema.org structured data marking you as `creator` and `copyrightHolder`
+  of every image, with `copyrightNotice` and `creditText`. Google Images shows
+  these credits.
+- **In every image file:** each photo carries its own copyright data, so the
+  notice travels with the file even if someone saves it. The EXIF Artist and
+  Copyright fields are set, and the XMP data includes `dc:creator`, `dc:rights`,
+  `xmpRights:Marked`, usage terms, and the PLUS "AI data mining prohibited"
+  flag. Camera, date, and GPS data are still removed.
+- **Saving is discouraged:** right-click, dragging, and the iOS long-press
+  "Save Image" menu are disabled on photos.
+- **AI crawlers:** `robots.txt` and `noai` meta tags ask AI-training crawlers
+  (GPTBot, CCBot, Google-Extended, ClaudeBot, etc.) not to collect the site.
+  Normal search engines can still index it.
+
+No website can make images impossible to copy: screenshots and browser
+developer tools still work. These measures stop casual saving and make your
+ownership clear wherever the files end up, which is what matters if you ever
+need to file a takedown.
 
 ## Local preview
 ```

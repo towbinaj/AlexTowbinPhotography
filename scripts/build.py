@@ -372,12 +372,50 @@ def trim_white_border(im: Image.Image, threshold: int = 232) -> Image.Image:
     return im.crop(crop)
 
 
-def render_images(photo: Photo, out_dir: Path, trim: bool = True) -> dict | None:
+# --------------------------------------------------------------------------
+# Copyright
+# --------------------------------------------------------------------------
+
+def rights(config: dict) -> dict:
+    """Copyright holder, year span and notice text, from config.json."""
+    holder = config.get("copyright_holder") or config.get("name") or "the photographer"
+    year = datetime.now(timezone.utc).year
+    start = int(config.get("copyright_start_year") or year)
+    years = f"{start}\u2013{year}" if start < year else str(year)
+    notice = f"\u00a9 {years} {holder}. All rights reserved."
+    terms = (f"All photographs are copyright {holder} and may not be copied, reproduced, "
+             "distributed, modified, or used (including for AI training) without prior written permission.")
+    return {"holder": holder, "years": years, "notice": notice, "terms": terms}
+
+
+def rights_metadata(r: dict) -> tuple[bytes, bytes]:
+    """EXIF + XMP blocks carrying only authorship/copyright (no camera, date or GPS data)."""
+    exif = Image.Exif()
+    exif[0x013B] = r["holder"]   # Artist
+    # EXIF text is ASCII-only, so spell out the symbol there (XMP keeps the real ©).
+    exif[0x8298] = r["notice"].replace("\u00a9", "Copyright").replace("\u2013", "-")
+    esc = lambda t: html.escape(t, quote=True)
+    xmp = f"""<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/"
+ xmlns:xmpRights="http://ns.adobe.com/xap/1.0/rights/" xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+ xmlns:plus="http://ns.useplus.org/ldf/xmp/1.0/" photoshop:Credit="{esc(r['holder'])}" xmpRights:Marked="True"
+ plus:DataMining="http://ns.useplus.org/ldf/vocab/DMI-PROHIBITED">
+<dc:creator><rdf:Seq><rdf:li>{esc(r['holder'])}</rdf:li></rdf:Seq></dc:creator>
+<dc:rights><rdf:Alt><rdf:li xml:lang="x-default">{esc(r['notice'])}</rdf:li></rdf:Alt></dc:rights>
+<xmpRights:UsageTerms><rdf:Alt><rdf:li xml:lang="x-default">{esc(r['terms'])}</rdf:li></rdf:Alt></xmpRights:UsageTerms>
+</rdf:Description></rdf:RDF></x:xmpmeta>
+<?xpacket end="w"?>"""
+    return exif.tobytes(), xmp.encode("utf-8")
+
+
+def render_images(photo: Photo, out_dir: Path, trim: bool = True,
+                  meta: tuple[bytes, bytes] | None = None) -> dict | None:
     try:
         with Image.open(photo.source) as im:
             if im.format == "JPEG":
                 im.draft("RGB", (SIZES[-1], SIZES[-1]))  # fast DCT downscale for huge originals
-            im = ImageOps.exif_transpose(im)  # bake rotation in; metadata is dropped on save
+            im = ImageOps.exif_transpose(im)  # bake rotation in; original metadata is dropped on save
             im = im.convert("RGB")
             if trim:
                 im = trim_white_border(im)
@@ -390,7 +428,8 @@ def render_images(photo: Photo, out_dir: Path, trim: bool = True) -> dict | None
                     break  # source is smaller than this step; don't upscale
                 img = im if scale == 1.0 else im.resize(size, Image.LANCZOS)
                 rel = f"img/{photo.id}-{size[0]}.webp"
-                img.save(out_dir / rel, "WEBP", quality=WEBP_QUALITY, method=5)
+                extra = {"exif": meta[0], "xmp": meta[1]} if meta else {}
+                img.save(out_dir / rel, "WEBP", quality=WEBP_QUALITY, method=5, **extra)
                 srcs.append({"w": size[0], "h": size[1], "url": rel})
 
             # Tiny blurred placeholder shown while the real image loads.
@@ -419,6 +458,45 @@ def sort_photos(photos: list[Photo], mode: str) -> list[Photo]:
     return sorted(photos, key=key, reverse=reverse)
 
 
+def json_ld(entries: list[dict], config: dict, r: dict, site_url: str) -> str:
+    """schema.org structured data: who made the photos and who holds the copyright.
+
+    Search engines (e.g. Google Images) read creator/copyrightNotice/creditText
+    from ImageObject entries and show them alongside the image.
+    """
+    base = site_url + "/" if site_url else ""
+    person = {"@type": "Person", "name": r["holder"]}
+    if config.get("instagram"):
+        person["sameAs"] = [f"https://www.instagram.com/{config['instagram'].lstrip('@')}/"]
+    images = [{
+        "@type": "ImageObject",
+        "contentUrl": base + e["src"][-1]["url"],
+        "thumbnailUrl": base + e["src"][0]["url"],
+        "width": e["w"], "height": e["h"],
+        **({"caption": e["caption"]} if e["caption"] else {}),
+        "creator": person,
+        "copyrightHolder": person,
+        "copyrightNotice": r["notice"],
+        "creditText": r["holder"],
+        "license": base + "#rights",
+        "acquireLicensePage": base + "#rights",
+    } for e in entries]
+    data = {
+        "@context": "https://schema.org",
+        "@type": "ImageGallery",
+        "name": config.get("title", ""),
+        "url": site_url or None,
+        "author": person,
+        "copyrightHolder": person,
+        "copyrightYear": int(r["years"][-4:]),
+        "copyrightNotice": r["notice"],
+        "image": images,
+    }
+    data = {k: v for k, v in data.items() if v is not None}
+    # Safe to inline in <script>: no "</" sequences survive.
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+
+
 def build(photos: list[Photo], config: dict) -> None:
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -429,22 +507,24 @@ def build(photos: list[Photo], config: dict) -> None:
     if config.get("max_photos"):
         photos = photos[: int(config["max_photos"])]
 
+    r = rights(config)
+    meta = rights_metadata(r)
     entries = []
     og_written = False
     for p in photos:
-        e = render_images(p, OUT, trim=config.get("trim_white_borders", False))
+        e = render_images(p, OUT, trim=config.get("trim_white_borders", False), meta=meta)
         if not e:
             continue
         im = e.pop("_im")
         if not og_written:  # social-preview image (JPEG for widest compatibility)
             og = im.copy()
             og.thumbnail((1200, 1200))
-            og.save(OUT / "img" / "og.jpg", "JPEG", quality=82)
+            og.save(OUT / "img" / "og.jpg", "JPEG", quality=82, exif=meta[0], xmp=meta[1])
             og_written = True
         entries.append(e)
 
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
-    cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r)
     (OUT / "config.json").write_text(json.dumps(cfg))
 
     site_url = os.environ.get("SITE_URL", "").rstrip("/")
@@ -454,6 +534,9 @@ def build(photos: list[Photo], config: dict) -> None:
     index.write_text(index.read_text()
                      .replace("{{TITLE}}", title)
                      .replace("{{DESCRIPTION}}", desc)
+                     .replace("{{AUTHOR}}", html.escape(r["holder"]))
+                     .replace("{{COPYRIGHT}}", html.escape(r["notice"]))
+                     .replace("{{JSONLD}}", json_ld(entries, config, r, site_url))
                      .replace("{{OG_IMAGE}}", f"{site_url}/img/og.jpg" if og_written else ""))
     (OUT / ".nojekyll").write_text("")
     print(f"Built {len(entries)} photos into {OUT}")

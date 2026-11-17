@@ -158,11 +158,26 @@ body.has-cursor .cursor.big span { opacity: 1; }
 .footer-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px 24px; padding: 18px var(--pad) calc(22px + env(safe-area-inset-bottom)); color: var(--muted); border-top: 1px solid var(--line); }
 .footer-meta a:hover { color: var(--fg); }
 
+/* Rights */
+.rights { padding: clamp(60px, 10vh, 120px) var(--pad) 0; display: grid; grid-template-columns: 1fr 3fr; gap: var(--pad); }
+.rights .label { color: var(--muted); margin: 6px 0 0; }
+.rights p { margin: 0 0 12px; max-width: 62ch; }
+.rights-notice { font: 400 clamp(22px, 2.4vw, 34px)/1.15 var(--serif); }
+.rights-terms, .rights-contact { color: var(--muted); }
+.rights-contact a { color: var(--fg); border-bottom: 1px solid var(--line); }
+@media (max-width: 700px) { .rights { grid-template-columns: 1fr; gap: 12px; } }
+
+/* Discourage saving: no drag, no iOS long-press menu, no selection */
+.ph, .hero-media, .lb-stage { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.ph img, .hero-media img, .lb-stage img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
+.lb-stage img { pointer-events: auto; }
+
 /* Lightbox */
 .lightbox { position: fixed; inset: 0; z-index: 55; background: #080807; display: grid; grid-template-rows: 1fr auto; }
 .lb-stage { position: relative; display: flex; align-items: center; justify-content: center; padding: 64px var(--pad) 12px; min-height: 0; touch-action: pan-y pinch-zoom; cursor: zoom-out; }
 .lb-stage img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; cursor: default; view-transition-name: active-photo; }
 .lb-bar { display: grid; grid-template-columns: 1fr 2fr 1fr; align-items: center; gap: 16px; padding: 14px var(--pad) calc(16px + env(safe-area-inset-bottom)); color: var(--muted); }
+.lb-credit { margin-left: 14px; color: var(--dim); }
 .lb-caption { text-align: center; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-actions { display: flex; justify-content: flex-end; gap: 22px; }
 .lb-actions button { color: var(--muted); transition: color .2s; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }

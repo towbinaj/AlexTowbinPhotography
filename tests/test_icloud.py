@@ -150,15 +150,38 @@ def test_trim_leaves_borderless_photo_alone():
     assert build.trim_white_border(Image.new("RGB", (800, 600), (90, 90, 90))).size == (800, 600)
 
 
-def test_render_strips_metadata(tmp_path):
+def test_render_strips_camera_metadata_and_adds_copyright(tmp_path):
     src = tmp_path / "in.jpg"
     exif = Image.Exif()
-    exif[0x0112] = 6  # rotate 90°
-    exif[0x010F] = "TestCam"
+    exif[0x0112] = 6            # rotate 90°
+    exif[0x010F] = "TestCam"    # Make
+    gps = exif.get_ifd(0x8825)
+    gps[1] = "N"
     framed(400, 300, 10).save(src, exif=exif)
     (tmp_path / "img").mkdir()
-    entry = build.render_images(build.Photo(id="x", source=src), tmp_path, trim=False)
+    r = build.rights({"name": "Test Person", "copyright_start_year": 2020})
+    assert r["notice"].startswith("\u00a9 2020\u2013") and r["notice"].endswith("Test Person. All rights reserved.")
+    entry = build.render_images(build.Photo(id="x", source=src), tmp_path, trim=False,
+                                meta=build.rights_metadata(r))
     assert (entry["w"], entry["h"]) == (300, 400)  # orientation baked in
     for s in entry["src"]:
         with Image.open(tmp_path / s["url"]) as im:
-            assert not im.getexif() and "exif" not in im.info
+            ex = im.getexif()
+            assert set(ex) == {0x013B, 0x8298}          # only Artist + Copyright survive
+            assert ex[0x013B] == "Test Person"
+            assert ex[0x8298].startswith("Copyright 2020-") and ex[0x8298].isascii()
+            assert not ex.get_ifd(0x8825)               # no GPS
+            assert b"xmpRights:Marked=\"True\"" in im.info.get("xmp", b"")
+
+
+def test_json_ld_is_safe_and_credits_holder():
+    r = build.rights({"name": "Test Person"})
+    entries = [{"w": 3, "h": 4, "caption": "</script><b>", "src": [{"url": "img/a-1.webp"}, {"url": "img/a-2.webp"}]}]
+    out = build.json_ld(entries, {"title": "T", "instagram": "someone"}, r, "https://example.org/site")
+    assert "</" not in out
+    import json
+    d = json.loads(out)
+    img = d["image"][0]
+    assert img["creator"]["name"] == "Test Person" and img["copyrightNotice"] == r["notice"]
+    assert img["contentUrl"] == "https://example.org/site/img/a-2.webp"
+    assert img["license"] == "https://example.org/site/#rights"

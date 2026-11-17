@@ -136,6 +136,7 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
     res = results[0]
     access = res["anonymousPublicAccess"]
     zone = res["zoneID"]
+    owner = zone.get("ownerRecordName")
     name = (((res.get("share") or {}).get("fields") or {}).get("cloudkit.title") or {}).get("value", "")
     partition = access["databasePartition"].rstrip("/")
     query_url = f"{partition}/database/1/com.apple.photos.cloud/production/shared/records/query"
@@ -172,11 +173,17 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
 
     items = []
     seen = set()
+    not_owner = 0
     for a in assets:
         af = a.get("fields") or {}
         if a["recordName"] in seen:
             continue
         seen.add(a["recordName"])
+        # Only publish photos the album owner added. Anyone who joins via the
+        # link can add photos to a shared album; those never reach the site.
+        if not owner or (a.get("created") or {}).get("userRecordName") != owner:
+            not_owner += 1
+            continue
         if any(int((af.get(k) or {}).get("value") or 0) for k in ("isHidden", "isDeleted", "trashReason")):
             continue
         mref = ((af.get("masterRef") or {}).get("value") or {}).get("recordName")
@@ -201,6 +208,8 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
             "taken": iso_ms((af.get("assetDate") or {}).get("value")),
             "added": iso_ms((af.get("addedDate") or {}).get("value")),
         })
+    if not_owner:
+        print(f"  ignored {not_owner} photo(s) added by someone other than the album owner")
     return name, items
 
 

@@ -43,11 +43,12 @@ def master(name, item_type="public.jpeg", **fields):
     return {"recordName": name, "recordType": "CPLMaster", "fields": f}
 
 
-def asset(name, master_name, added, **fields):
+def asset(name, master_name, added, by="_owner", **fields):
     f = {"masterRef": {"value": {"recordName": master_name}}, "addedDate": {"value": added},
          "assetDate": {"value": 1754400000000}}
     f.update(fields)
-    return {"recordName": name, "recordType": "CPLAsset", "fields": f}
+    return {"recordName": name, "recordType": "CPLAsset", "fields": f,
+            "created": {"userRecordName": by}}
 
 
 class FakeCK:
@@ -76,12 +77,14 @@ def test_cloudkit_album_picks_edits_skips_video_and_hidden():
         master("m3", item_type="com.apple.quicktime-movie"), asset("a3", "m3", 1700000002000),
         master("m4"), asset("a4", "m4", 1700000003000, isHidden={"value": 1}),
         master("m5", item_type="public.mystery-raw"), asset("a5", "m5", 1700000004000),
+        master("m6"), asset("a6", "m6", 1700000005000, by="_stranger"),   # joined via link and added a photo
     ]
     s = FakeCK(recs)
     name, items = build.fetch_cloudkit_album("0abc", session=s)
     assert name == "Portfolio"
     by = {i["checksum"]: i for i in items}
-    assert set(by) == {"orig-m1", "edited-2", "med-m5"}  # original, edited render, fallback for odd originals
+    # original, edited render, fallback for odd originals; the stranger's photo is ignored
+    assert set(by) == {"orig-m1", "edited-2", "med-m5"}
     assert by["orig-m1"]["caption"] == "Pantheon"
     assert by["orig-m1"]["url"] == "https://cvws.icloud-content.com/B/x/photo.jpg?o=1"
     assert by["orig-m1"]["added"] == "2023-11-14T22:13:20Z"

@@ -23,10 +23,11 @@ If iCloud is unreachable or returns an empty album, the build fails and the
 site keeps showing the last good version. GitHub emails you about failed runs.
 
 ## One-time setup
-1. **Album link:** in Photos, open the shared album, turn on sharing by link,
-   and copy the link (e.g. `https://photos.icloud.com/shared/album/03e…`).
-   **Make the link view-only.** If anyone with the link can add photos, anyone
-   who gets the link can put photos on your website.
+1. **Album link:** in Photos, open the shared album → Manage Shared Album →
+   **Copy Album Link** (e.g. `https://photos.icloud.com/shared/album/03e…`).
+   Leave Sharing Options on "Anyone with the link can join". Anyone who joins
+   through the link could add photos to the album, but **the site only
+   publishes photos you added yourself**. Keep the link private anyway.
 2. **Secret:** in this repo go to *Settings → Secrets and variables → Actions →
    New repository secret*. Name it `ICLOUD_ALBUM` and paste the whole link as
    the value. The link stays private this way: it is never written into the

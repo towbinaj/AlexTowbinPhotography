@@ -6,5 +6,5 @@
   "about": "",
   "sort": "newest-added",
   "max_photos": 0,
-  "trim_white_borders": true
+  "trim_white_borders": false
 }

@@ -13,7 +13,6 @@ right away, go to *Actions → Build & deploy site → Run workflow*.
    same ones photos.icloud.com uses. It downloads full-resolution originals, or
    your edited version if you edited a photo in Photos. Videos are skipped.
 3. Each photo is:
-   - **trimmed** of any uniform white frame (e.g. from an Instagram export),
    - **resized** to several WebP sizes (480 → 3200 px) so each screen gets a
      sharp image without downloading more than it needs,
    - **re-encoded**, which strips **all metadata, including GPS location**.
@@ -48,7 +47,7 @@ Edit `config.json`:
 | `about` | optional About text (line breaks kept); the About section only appears if set |
 | `sort` | `newest-added` (default), `oldest-added`, `newest-taken`, or `oldest-taken` |
 | `max_photos` | `0` for all, or a number to cap the gallery |
-| `trim_white_borders` | `true` (default) crops uniform white frames off photos |
+| `trim_white_borders` | `false` (default) keeps photos exactly as framed; `true` crops uniform white borders |
 
 Captions you add to photos in Photos appear under the photo and in the full-screen view.
 

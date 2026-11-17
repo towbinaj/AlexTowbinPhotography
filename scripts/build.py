@@ -432,7 +432,7 @@ def build(photos: list[Photo], config: dict) -> None:
     entries = []
     og_written = False
     for p in photos:
-        e = render_images(p, OUT, trim=config.get("trim_white_borders", True))
+        e = render_images(p, OUT, trim=config.get("trim_white_borders", False))
         if not e:
             continue
         im = e.pop("_im")

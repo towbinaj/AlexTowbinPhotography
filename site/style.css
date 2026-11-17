@@ -17,7 +17,7 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   background: var(--bg);
@@ -60,7 +60,8 @@ body.has-cursor .cursor.big span { opacity: 1; }
   position: fixed; inset: 0 0 auto 0; z-index: 20;
   display: flex; justify-content: space-between; align-items: center;
   padding: 18px var(--pad);
-  mix-blend-mode: difference; color: #fff;
+  /* Opaque so photos never show through the header while scrolling. */
+  background: var(--bg); color: var(--fg); border-bottom: 1px solid var(--line);
 }
 .bar-name { font: 400 22px/1 var(--serif); letter-spacing: .01em; }
 .bar-nav { display: flex; gap: clamp(16px, 3vw, 36px); font: 400 12px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -107,7 +108,6 @@ body.has-cursor .cursor.big span { opacity: 1; }
   .hero-media { order: -1; height: 46svh; min-height: 0; }
   .hero-index { display: none; }
   .hero-foot { margin-top: 36px; }
-  .bar { mix-blend-mode: normal; color: var(--fg); background: linear-gradient(to bottom, rgba(11,11,10,.85), rgba(11,11,10,0)); }
 }
 
 /* Work */

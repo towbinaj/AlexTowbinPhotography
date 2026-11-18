@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.github.com; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Photo Editor</title>
+  <meta name="theme-color" content="#0b0b0a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AT Editor">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300..600&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="edit.css">
+</head>
+<body>
+  <!-- Key setup -->
+  <section class="screen setup" id="setup" hidden aria-labelledby="setup-h">
+    <form class="card" id="setup-form" autocomplete="off" novalidate>
+      <p class="mono eyebrow">Alex Towbin · Editor</p>
+      <h1 id="setup-h">Connect this device</h1>
+      <p>Paste your GitHub key. It stays on this device and is used only to save
+         titles, collections and order to the photo data repository.</p>
+      <p class="mono help"><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a key on GitHub ↗</a>
+         — only <span id="setup-repo"></span>, with “Contents: read and write”.</p>
+      <label class="field"><span class="mono">Key</span>
+        <input id="setup-key" type="password" placeholder="github_pat_…" spellcheck="false" autocapitalize="off" autocomplete="off"></label>
+      <label class="field"><span class="mono">Expires on</span>
+        <input id="setup-exp" type="date"></label>
+      <label class="check"><input id="setup-noexp" type="checkbox"> <span>No expiration</span></label>
+      <p class="mono hint">GitHub doesn't tell the app when a key expires, so enter the date you chose. The app warns you two weeks ahead.</p>
+      <p class="err mono" id="setup-err" role="alert"></p>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="setup-cancel" hidden>Cancel</button>
+        <button type="submit" class="btn" id="setup-save">Connect</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Photo grid -->
+  <section class="screen" id="list" hidden>
+    <header class="top">
+      <h1 class="brand">Editor</h1>
+      <span class="mono count" id="list-count"></span>
+      <button type="button" class="icon-btn mono" id="open-settings" aria-label="Settings">Key</button>
+    </header>
+    <p class="banner mono" id="banner" hidden></p>
+    <nav class="chips mono" id="chips" aria-label="Filter"></nav>
+    <div class="grid" id="grid"></div>
+    <p class="empty mono" id="list-empty" hidden>Nothing here.</p>
+  </section>
+
+  <!-- Photo detail -->
+  <section class="screen" id="detail" hidden>
+    <header class="top">
+      <button type="button" class="icon-btn mono" id="back">‹ All</button>
+      <span class="mono count" id="detail-count"></span>
+      <span class="nav">
+        <button type="button" class="icon-btn" id="prev" aria-label="Previous photo">←</button>
+        <button type="button" class="icon-btn" id="next" aria-label="Next photo">→</button>
+      </span>
+    </header>
+    <figure class="photo"><img id="detail-img" alt="" draggable="false"></figure>
+    <form class="fields" id="detail-form" autocomplete="off" novalidate>
+      <label class="field"><span class="mono">Title</span>
+        <input id="f-title" type="text" maxlength="200" placeholder="No title — the date is shown" enterkeyhint="done"></label>
+      <div class="row">
+        <label class="field grow"><span class="mono">Collection</span>
+          <select id="f-coll"></select></label>
+        <label class="field narrow"><span class="mono">No. in it</span>
+          <span class="num"><input id="f-cpos" type="number" inputmode="numeric" min="1" step="1"><span class="mono of" id="f-cpos-of"></span></span></label>
+      </div>
+      <label class="field" id="f-newcoll-wrap" hidden><span class="mono">New collection name</span>
+        <input id="f-newcoll" type="text" maxlength="60" placeholder="e.g. Chicago at Night"></label>
+      <div class="row">
+        <label class="toggle grow"><input id="f-high" type="checkbox"> <span>Highlight on main page</span></label>
+        <label class="field narrow"><span class="mono">Main page No.</span>
+          <span class="num"><input id="f-mpos" type="number" inputmode="numeric" min="1" step="1"><span class="mono of" id="f-mpos-of"></span></span></label>
+      </div>
+      <dl class="facts mono">
+        <div><dt>Taken</dt><dd id="f-taken"></dd></div>
+        <div><dt>Added</dt><dd id="f-added"></dd></div>
+        <div><dt>Location</dt><dd id="f-loc"></dd></div>
+      </dl>
+      <div class="savebar">
+        <span class="status mono" id="f-status" role="status" aria-live="polite"></span>
+        <button type="submit" class="btn" id="f-save" disabled>Save</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Settings -->
+  <section class="screen setup" id="settings" hidden aria-labelledby="settings-h">
+    <div class="card">
+      <p class="mono eyebrow">Settings</p>
+      <h1 id="settings-h">Key</h1>
+      <dl class="facts mono">
+        <div><dt>Repository</dt><dd id="s-repo"></dd></div>
+        <div><dt>Expires</dt><dd id="s-exp"></dd></div>
+      </dl>
+      <div class="actions wrap">
+        <button type="button" class="btn ghost" id="s-forget">Forget key</button>
+        <button type="button" class="btn ghost" id="s-replace">Replace key</button>
+        <button type="button" class="btn" id="s-close">Done</button>
+      </div>
+      <p class="mono help"><a href="../" id="s-site">Open the site ↗</a></p>
+    </div>
+  </section>
+
+  <p class="boot mono" id="boot">Loading…</p>
+
+  <script src="../titlecase.js"></script>
+  <script src="model.js"></script>
+  <script src="edit.js"></script>
+</body>
+</html>

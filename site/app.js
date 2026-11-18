@@ -369,7 +369,7 @@
     async function readCuration() {
       const cur = await getJSON("curation.json");
       const d = cur.exists && isObj(cur.data) ? cur.data : {};
-      return { titles: isObj(d.titles) ? d.titles : {}, order: Array.isArray(d.order) ? d.order : [], sha: cur.sha };
+      return { raw: d, titles: isObj(d.titles) ? d.titles : {}, order: Array.isArray(d.order) ? d.order : [], sha: cur.sha };
     }
 
     // change = { id, title, order? }  (order: full list of photo ids, or undefined to leave as is)
@@ -379,7 +379,8 @@
         const titles = { ...cur.titles };
         if (change.title) titles[change.id] = change.title; else delete titles[change.id];
         const sorted = Object.fromEntries(Object.keys(titles).sort().map((k) => [k, titles[k]]));
-        const doc = { titles: sorted, order: change.order || cur.order };
+        // Keep fields this editor doesn't know (collections, highlights from the app).
+        const doc = { ...cur.raw, titles: sorted, order: change.order || cur.order };
         const parts = [];
         if ((cur.titles[change.id] || "") !== (change.title || "")) parts.push(change.title ? `title "${change.title}"` : "title removed");
         if (change.order) parts.push(`moved to #${change.order.indexOf(change.id) + 1}`);

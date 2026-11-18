@@ -39,7 +39,7 @@ owner's iCloud shared album, processes them, and builds a static site into
   fine-grained GitHub key with Contents read/write on this repo only, stored in
   the owner's browser) — the key is scoped to the **data repo**
   `towbinaj/AlexTowbinPhotographyData` only. Saves write `curation.json`
-  (`{titles, order}`) there via the GitHub API; the page reads it live from
+  (`{titles, order, collections, highlights}`) there via the GitHub API; the page reads it live from
   raw.githubusercontent.com and the build bakes it in (CI checks it out into
   `data/`). Treat it as untrusted input (validate, render as text only). Unplaced (new) photos sort first. Titles are optional: untitled photos show the date. Apple
   captions/comments are not reachable through the public album link (tested).
@@ -56,6 +56,7 @@ config.json                 site settings (name, tagline, about, sort, copyright
 data/                       (git-ignored) checkout of the data repo with curation.json
 scripts/build.py            iCloud fetch → image processing → _site/
 site/index.html|style.css|app.js|titlecase.js|robots.txt   static front end (no framework, no build step)
+site/edit/                  phone editor app (index.html, edit.js, model.js = pure data logic, tested via node)
 tests/test_icloud.py        offline tests (fake iCloud responses; no network)
 .github/workflows/deploy.yml  test → build → deploy to Pages
 ```

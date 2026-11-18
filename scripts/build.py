@@ -418,12 +418,23 @@ def rights_metadata(r: dict) -> tuple[bytes, bytes]:
     return exif.tobytes(), xmp.encode("utf-8")
 
 
+def has_location(im: Image.Image) -> bool:
+    """Whether the original carries GPS coordinates (for the editor app's
+    location check). Only this flag is published, never the coordinates."""
+    try:
+        gps = im.getexif().get_ifd(0x8825)
+    except Exception:
+        return False
+    return 2 in gps and 4 in gps  # GPSLatitude and GPSLongitude
+
+
 def render_images(photo: Photo, out_dir: Path, trim: bool = True,
                   meta: tuple[bytes, bytes] | None = None) -> dict | None:
     try:
         with Image.open(photo.source) as im:
             if im.format == "JPEG":
                 im.draft("RGB", (SIZES[-1], SIZES[-1]))  # fast DCT downscale for huge originals
+            located = has_location(im)        # yes/no only: coordinates are never published
             im = ImageOps.exif_transpose(im)  # bake rotation in; original metadata is dropped on save
             im = im.convert("RGB")
             if trim:
@@ -450,6 +461,7 @@ def render_images(photo: Photo, out_dir: Path, trim: bool = True,
 
             return {"id": photo.id, "w": w, "h": h, "caption": photo.caption,
                     "taken": photo.taken, "added": photo.added, "lqip": lqip, "src": srcs,
+                    "located": located,
                     "_im": im}
     except Exception as e:  # one bad file shouldn't sink the whole site
         print(f"  skipping {photo.source.name}: {e}", file=sys.stderr)

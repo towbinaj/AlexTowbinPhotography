@@ -87,7 +87,7 @@ kept as typed.
 The key is stored only in that browser (*Forget key* removes it), and visitors
 never see the editor.
 
-Everything is saved to `curation.json` in the separate, public data repository
+Everything (also collections and highlights from the phone app) is saved to `curation.json` in the separate, public data repository
 [towbinaj/AlexTowbinPhotographyData](https://github.com/towbinaj/AlexTowbinPhotographyData)
 (`data_repo` in `config.json`), keyed by photo. The page reads it live from
 `raw.githubusercontent.com`; the nightly build also bakes it in (for search
@@ -101,6 +101,32 @@ untitled and unplaced.
 
 Captions set in the Photos app can't be used: Apple doesn't pass them, or
 comments on shared-album photos, through the album's public link.
+
+### Phone editor app (`/edit/`)
+A small app for editing on your phone, at
+**https://towbinaj.github.io/AlexTowbinPhotography/edit/** (not linked from the
+site, and hidden from search engines). In Safari, tap *Share → Add to Home
+Screen* to install it; it gets its own icon (the monogram on a light
+background) and opens full screen.
+
+- **First time:** paste the same kind of key as above (data repository only,
+  Contents read and write) and enter the expiry date you picked, or tick
+  *No expiration*. GitHub doesn't tell the app the date, so it asks; it then
+  warns you two weeks before the key expires. A home-screen app keeps its own
+  storage, separate from Safari, so it asks once even if Safari has the key.
+- **Grid:** every photo on the site, with its title (or the date in grey),
+  collection and number, and ★ for highlights. Filter by *Untitled*, *★*,
+  *No collection* or any collection.
+- **Photo:** tap one to set its **title**, **collection** (pick one or
+  *New collection…*), its **No. in the collection**, **highlight on main
+  page**, and its **main page No.** Also shows when it was taken and added,
+  and whether the photo kept its **location** (yes/no only; coordinates are
+  never published). Swipe or use the arrows for the next photo. **Save**
+  commits to the data repository.
+- **Key** (top right): see the expiry date, replace or forget the key.
+
+Collections and highlights are saved now but don't change the public site yet;
+that comes next. New album photos show up in the app after the nightly build.
 
 ## The site
 - **Opening screen:** your name in large serif type beside a slideshow of

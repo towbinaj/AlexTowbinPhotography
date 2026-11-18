@@ -134,8 +134,21 @@ parity-tested), adds a CSP, and the `#edit` key now targets the data repo
 (new localStorage key name, so old keys are dropped). **Merge order:** merge
 the data repo branch first, re-sync `curation.json` from the site's `main` if
 it was edited meanwhile, then merge the site. Then the owner makes the new
-key (data repo only) and deletes the old site-repo key. Next: step 3, the
-`/edit/` app.
+key (data repo only) and deletes the old site-repo key. **Done and merged
+2026-11-18;** owner made the new key, deleted the old one, and a test save
+landed in the data repo.
+
+**Step 3 (app) built on branch `claude/elegant-hypatia-rpwb2z`:** `site/edit/`
+(installable, own manifest + inverted monogram icon, noindex, same CSP).
+Data model in `site/edit/model.js` (node-tested from pytest):
+`collections: [{name, photos: [ids in order]}]` (one collection per photo),
+`highlights: [ids]`. Location is a published **yes/no flag only**
+(`located` in photos.json, from EXIF GPS before stripping) — owner chose
+this; never publish coordinates. Key expiry: GitHub's expiration header isn't
+CORS-exposed, so the app asks for the date at setup and warns 14 days ahead.
+Site `#edit` now preserves unknown fields when saving. Not done: Face ID lock
+(optional); step 5 site changes (collections as sections, highlights on the
+main page/hero, build-side validation of the new fields); then remove `#edit`.
 The owner wants a small editor on their phone: set a title, assign a photo to
 a **collection** (series), set its **position within the collection**, toggle
 a **main-page highlight**, and **check its location**. Agreed design:

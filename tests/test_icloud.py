@@ -168,6 +168,7 @@ def test_render_strips_camera_metadata_and_adds_copyright(tmp_path):
     entry = build.render_images(build.Photo(id="x", source=src), tmp_path, trim=False,
                                 meta=build.rights_metadata(r))
     assert (entry["w"], entry["h"]) == (300, 400)  # orientation baked in
+    assert entry["located"] is False               # GPS ref without coordinates
     for s in entry["src"]:
         with Image.open(tmp_path / s["url"]) as im:
             ex = im.getexif()
@@ -310,3 +311,82 @@ def test_clean_title_js_matches_python():
     out = subprocess.run([node, "-e", script, str(root / "site" / "titlecase.js"), json.dumps(UNTRUSTED_TITLES)],
                          capture_output=True, text=True, check=True).stdout
     assert json.loads(out) == [build.clean_title(t) for t in UNTRUSTED_TITLES]
+
+
+def test_location_is_a_flag_never_coordinates(tmp_path):
+    src = tmp_path / "gps.jpg"
+    exif = Image.Exif()
+    gps = exif.get_ifd(0x8825)
+    gps.update({1: "N", 2: (41.0, 52.0, 30.0), 3: "W", 4: (87.0, 37.0, 50.0)})
+    framed(200, 150, 5).save(src, exif=exif)
+    (tmp_path / "img").mkdir()
+    entry = build.render_images(build.Photo(id="g", source=src), tmp_path, trim=False)
+    assert entry["located"] is True
+    assert set(entry) == {"id", "w", "h", "caption", "taken", "added", "lqip", "src", "located", "_im"}
+    with Image.open(tmp_path / entry["src"][0]["url"]) as im:
+        assert not im.getexif().get_ifd(0x8825)
+
+
+# ---- editor app data model (site/edit/model.js, run in node) ----
+
+def _node_model(script, *args):
+    import shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node not installed")
+    root = Path(__file__).resolve().parent.parent
+    pre = (f"const cleanTitle=require({json.dumps(str(root / 'site' / 'titlecase.js'))}).cleanTitle;"
+           f"const M=require({json.dumps(str(root / 'site' / 'edit' / 'model.js'))});")
+    out = subprocess.run([node, "-e", pre + script, *args], capture_output=True, text=True, check=True).stdout
+    return json.loads(out)
+
+
+def test_model_normalize_rejects_junk():
+    raw = {"titles": {"a": "shine a light", "b": 5, "": "x", "c": "‮"},
+           "order": ["a", "a", 3, "b"],
+           "collections": [{"name": "chicago at night", "photos": ["a", "b", "a"]},
+                           {"name": "CHICAGO AT NIGHT", "photos": ["c"]},      # duplicate name
+                           {"name": "Other", "photos": ["b", "d"]},              # b already in one
+                           {"name": "", "photos": ["e"]}, "junk", {"name": "Empty", "photos": []}],
+           "highlights": ["a", None, "a"], "extra": "<script>"}
+    d = _node_model("process.stdout.write(JSON.stringify(M.normalize(JSON.parse(process.argv[1]),cleanTitle)))",
+                    json.dumps(raw))
+    assert d == {"titles": {"a": "Shine a Light"}, "order": ["a", "b"],
+                 "collections": [{"name": "Chicago at Night", "photos": ["a", "b"]},
+                                 {"name": "Other", "photos": ["d"]}],
+                 "highlights": ["a"]}
+
+
+def test_model_apply_change_moves_between_collections_and_reorders():
+    script = """
+    let d = M.normalize({titles:{}, order:[], collections:[{name:'One', photos:['a','b','c']}], highlights:[]}, cleanTitle);
+    const out = [];
+    let n = M.applyChange(d, {id:'b', collection:'two'}, cleanTitle);              // new collection
+    out.push(n.collections);
+    n = M.applyChange(n, {id:'c', collection:'One', collectionPos:1}, cleanTitle);  // reorder within
+    out.push(n.collections);
+    n = M.applyChange(n, {id:'b', collection:''}, cleanTitle);                      // remove: empty one dropped
+    out.push(n.collections);
+    n = M.applyChange(n, {id:'a', highlight:true, title:'  hello   world '}, cleanTitle);
+    n = M.applyChange(n, {id:'c', mainPos:99, mainIds:['a','b','c','d']}, cleanTitle);
+    out.push([n.highlights, n.titles, n.order, M.describe(d, n, 'a')]);
+    out.push(d.collections);                                                        // input untouched
+    process.stdout.write(JSON.stringify(out));
+    """
+    a, b, c, rest, orig = _node_model(script)
+    assert a == [{"name": "One", "photos": ["a", "c"]}, {"name": "Two", "photos": ["b"]}]
+    assert b[0] == {"name": "One", "photos": ["c", "a"]}
+    assert c == [{"name": "One", "photos": ["c", "a"]}]
+    assert rest[0] == ["a"] and rest[1] == {"a": "Hello World"} and rest[2] == ["a", "b", "d", "c"]
+    assert rest[3].startswith('Photo a: title "Hello World"') and "highlighted" in rest[3]
+    assert orig == [{"name": "One", "photos": ["a", "b", "c"]}]
+
+
+def test_model_order_matches_build_rule():
+    script = """const L=['n2','n1','c','a','b'].map(id=>({id}));
+    process.stdout.write(JSON.stringify([M.orderPhotos(L,['a','b','c','gone']).map(p=>p.id), M.orderPhotos(L,[]).map(p=>p.id)]));"""
+    placed, auto = _node_model(script)
+    P = lambda i: build.Photo(id=i, source=None)
+    want = [p.id for p in build.apply_order([P(i) for i in ["n2", "n1", "c", "a", "b"]], ["a", "b", "c", "gone"])]
+    assert placed == want and auto == ["n2", "n1", "c", "a", "b"]

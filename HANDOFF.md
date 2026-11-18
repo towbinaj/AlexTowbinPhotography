@@ -1,6 +1,6 @@
 # Handoff — Alex Towbin Photography
 
-Status as of 2026-11-17. Read `CLAUDE.md` first for rules and preferences.
+Status as of 2026-11-18. Read `CLAUDE.md` first for rules and preferences.
 
 ## Current state: live ✅
 - **Site:** https://towbinaj.github.io/AlexTowbinPhotography/
@@ -10,10 +10,16 @@ Status as of 2026-11-17. Read `CLAUDE.md` first for rules and preferences.
 - **Repo setup done by the owner:**
   - secret `ICLOUD_ALBUM` set
   - Pages source set to **GitHub Actions**
+- **Now:** 34 photos, 30 with owner titles (in `curation.json`).
 - **Branches:**
-  - `main` is live.
-  - `claude/adoring-newton-60frvi` was the development branch; it was
-    fast-forwarded into `main` and has nothing unmerged.
+  - `main` is live. All `claude/*` feature branches from 2026-11-17/18
+    (hero-border-fix, tile-hover-border, opaque-header, title-editor,
+    curation, title-case) are merged.
+  - `claude/location-check` is **experimental and unmerged**: an opt-in
+    `LOCATION_REPORT` diagnostic (field names/counts only, safe for public
+    logs), album-comment/post-caption lookups that turned out not to work,
+    and a **temporary** `push` trigger for that branch in `deploy.yml`.
+    Don't merge it as is; salvage the diagnostic if useful, or delete it.
 
 ## How the photo sync works (`scripts/build.py`)
 The owner's album is a **new-style iCloud shared album ("Shared Collection")**.
@@ -75,6 +81,19 @@ supported as a fallback, which `download_album()` picks from the token shape.
   The JSON-LD is an `ImageGallery` with an `ImageObject` per photo (creator,
   copyrightNotice, creditText, license → `#rights`).
 - **Fonts:** Google Fonts (Instrument Serif, Geist, Geist Mono).
+- **Header:** opaque (page background + hairline), `scroll-padding-top` keeps
+  anchors clear of it.
+- **Photos are never cropped or overlaid:** hero zoom runs 96%→100%; tile
+  hover scales the whole frame (2.5%), not the image inside; film grain sits
+  behind content (`z-index: -1`).
+- **Icons:** "AT." monogram (`favicon.ico`, `favicon-32.png`,
+  `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest`).
+- **Editor (`#edit`):** owner-only. Asks for a fine-grained GitHub key
+  (stored in that browser's localStorage), then the lightbox shows Title and
+  No. (position) fields. Save writes `curation.json` (`{titles, order}`) via
+  the GitHub contents API → push → deploy (~2 min). Titles are title-cased
+  (`title_case()` in build.py and `site/titlecase.js`, shared test cases).
+  Unplaced (new) photos sort first.
 
 ## Decisions log
 | Decision | Why |
@@ -88,6 +107,52 @@ supported as a fallback, which `download_album()` picks from the token shape.
 | Copyright everywhere + save deterrents | Owner wants to protect the work; it deters, can't prevent |
 | Film grain behind content | It sat over the photos (z-index 50); the art is never overlaid |
 | Titles + order set on the site (`#edit` → `curation.json`) | Apple doesn't expose captions/comments via the public link (tested: change feed is a frozen snapshot); owner keeps using Snapseed |
+
+## What the album does and doesn't expose (tested 2026-11-17/18)
+- **Location:** 0/34 photos carry GPS (not in files, not in Apple's
+  metadata). Most photos went through Snapseed, which saved JPEG copies
+  without location; the owner has since turned on keeping photo data in
+  Snapseed. Untested whether a fresh Snapseed edit keeps GPS through the
+  album, or whether a location added via Photos → Adjust survives.
+- **Captions/titles:** Photos-library captions don't travel into shared
+  albums. Comments on album photos and the text typed when adding photos are
+  **not reachable** through the public link: the CloudKit zone change feed
+  returns a frozen snapshot (stuck at 33 photos / 2 posts). Hence titles
+  live in the repo, set via the editor.
+- **Embedded description:** only the 7 Olympus photos have
+  `ImageDescription`, all the camera default "OLYMPUS DIGITAL CAMERA".
+
+## Next project: phone editing app (approved by the owner, not started)
+The owner wants a small editor on their phone: set a title, assign a photo to
+a **collection** (series), set its **position within the collection**, toggle
+a **main-page highlight**, and **check its location**. Agreed design:
+
+1. **Data repo, separate from the site.** Move `curation.json` into its own
+   small repo (e.g. `towbinaj/alextowbin-photo-data`, public — titles are
+   public anyway). The phone key gets Contents read/write on **that repo
+   only**, so a stolen key can never change site code, workflows or reach
+   the `ICLOUD_ALBUM` secret. *(Today's key is scoped to the site repo and
+   could change build code that runs with the album secret; closing this is
+   the first step.)* The owner has to create the repo and the new key; the
+   session can't create repositories. After migrating, the owner deletes the
+   old key.
+2. **Publishing:** the site reads the data repo's JSON at runtime (edits
+   live within minutes, no rebuild); the nightly build bakes it in for JSON-LD
+   / search. Build and page treat the data as untrusted: validate (lengths,
+   known photo ids, title case, collection names), render as text only
+   (JSON-LD already escapes `</`). Add a Content-Security-Policy so only
+   same-origin scripts run (allow Google Fonts CSS and the data fetch).
+3. **The app:** an installable web app at `/edit/` (own manifest and icon, not
+   linked from the site). On iOS, home-screen apps get storage separate from
+   Safari. Screens: photo grid with title/collection/highlight badges; photo
+   detail with title, collection, position in collection, highlight, date,
+   location + map link (when available). Show the key's expiry (GitHub's
+   `github-authentication-token-expiration` response header) and warn ~2
+   weeks ahead. Optional Face ID lock (passkey).
+4. **No server.** GitHub handles auth; the owner should keep 2FA on.
+5. **Site changes that follow:** collections as sections, highlights on the
+   main page / hero, per-collection order. Keep the current `#edit` until the
+   app replaces it, then remove it.
 
 ## Open items / ideas
 1. **Tagline** is now the owner's Instagram bio. `about` is still empty, so
@@ -107,8 +172,10 @@ supported as a fallback, which `download_album()` picks from the token shape.
    installed with `npx @opengsd/gsd-core@latest` and then `/gsd-onboard` for
    an existing repo. It adds `/gsd-*` commands and keeps state in files like
    `STATE.md`. Not installed yet. Ask before committing its files.
-6. **Possible features, not requested:**
-   - albums or sections, e.g. a second shared album per series
+6. **From the portfolio review (owner input needed):** About text + whether
+   to show an email (About section is hidden while `about` is empty);
+   collections (covered by the app project).
+7. **Possible features, not requested:**
    - a print-inquiry form
    - an optional subtle watermark
 
@@ -125,5 +192,9 @@ supported as a fallback, which `download_album()` picks from the token shape.
   unaffected.
 - That environment also lists the DCMTools repo, which is unrelated and can
   be removed in settings. **This project has nothing to do with DCMTools.**
+- `www.instagram.com` was added to the environment (to read the bio); it
+  was rate-limited (429) and isn't needed. It can be removed in settings.
+- This environment can't reach `*.github.io`; check deploys via the GitHub
+  Actions API instead.
 - `.cache/originals` doesn't survive a fresh clone. To iterate on the front
   end without network, use `--demo 30`.

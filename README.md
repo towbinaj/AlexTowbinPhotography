@@ -77,6 +77,11 @@ so neither one can be used for titles.
   loads, plus subtle film grain and a custom cursor on desktop.
 - **Accessibility:** motion is turned off for visitors who ask for reduced
   motion.
+- **Icons:** an "AT." monogram in the site's serif type, used for the browser
+  tab (`favicon.ico`, `favicon-32.png`) and the iPhone home screen
+  (`apple-touch-icon.png`, titled "Alex Towbin"). `site.webmanifest` gives
+  Android the same icon. They're plain image files in `site/`; replace them to
+  change the icon.
 
 ## Copyright protection
 - **On the page:** "© <years> <name>. All rights reserved." appears in the footer,

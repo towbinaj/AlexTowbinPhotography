@@ -17,7 +17,7 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   background: var(--bg);
@@ -60,7 +60,8 @@ body.has-cursor .cursor.big span { opacity: 1; }
   position: fixed; inset: 0 0 auto 0; z-index: 20;
   display: flex; justify-content: space-between; align-items: center;
   padding: 18px var(--pad);
-  mix-blend-mode: difference; color: #fff;
+  /* Opaque so photos never show through the header while scrolling. */
+  background: var(--bg); color: var(--fg); border-bottom: 1px solid var(--line);
 }
 .bar-name { font: 400 22px/1 var(--serif); letter-spacing: .01em; }
 .bar-nav { display: flex; gap: clamp(16px, 3vw, 36px); font: 400 12px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -107,7 +108,6 @@ body.has-cursor .cursor.big span { opacity: 1; }
   .hero-media { order: -1; height: 46svh; min-height: 0; }
   .hero-index { display: none; }
   .hero-foot { margin-top: 36px; }
-  .bar { mix-blend-mode: normal; color: var(--fg); background: linear-gradient(to bottom, rgba(11,11,10,.85), rgba(11,11,10,0)); }
 }
 
 /* Work */
@@ -125,12 +125,14 @@ body.has-cursor .cursor.big span { opacity: 1; }
 .masonry.grid { --gap: 6px; }
 
 .ph { display: block; position: relative; cursor: zoom-in; }
-.ph .frame { position: relative; overflow: hidden; background-size: cover; background-position: center; clip-path: inset(0 0 100% 0); transition: clip-path 1.1s var(--ease); }
+.ph .frame { position: relative; overflow: hidden; background-size: cover; background-position: center; clip-path: inset(0 0 100% 0); transition: clip-path 1.1s var(--ease), transform .6s var(--ease); }
 .ph.in .frame { clip-path: inset(0 0 0 0); }
-.ph img { display: block; width: 100%; height: auto; transform: scale(1.18); opacity: 0; transition: transform 1.6s var(--ease), opacity .8s ease, filter .6s; }
-.ph.in img.loaded { transform: scale(1); opacity: 1; }
+/* The photo itself is never scaled inside its frame: that would crop the print's white border. */
+.ph img { display: block; width: 100%; height: auto; opacity: 0; transition: opacity .8s ease, filter .6s; }
+.ph.in img.loaded { opacity: 1; }
 @media (hover: hover) {
-  .ph:hover img.loaded { transform: scale(1.035); }
+  .ph:hover { z-index: 2; }
+  .ph:hover .frame { transform: scale(1.025); }
   .masonry:has(.ph:hover) .ph:not(:hover) img { filter: brightness(.55) saturate(.7); }
 }
 .ph .meta { display: flex; justify-content: space-between; gap: 12px; padding-top: 10px; color: var(--muted); }

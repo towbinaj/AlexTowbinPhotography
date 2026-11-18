@@ -197,6 +197,69 @@ def location_report(asset_fields: list[dict], master_fields: list[dict]) -> list
     return lines
 
 
+# Camera firmware often fills the description field with a fixed string.
+_CAMERA_DEFAULT_DESCRIPTIONS = {
+    "", "olympus digital camera", "sony dsc", "digital camera", "dcim", "default",
+    "samsung", "nikon", "canon", "fujifilm", "kodak", "panasonic", "leica", "ricoh",
+    "pentax", "minolta", "<unknown>", "unknown", "picture", "image",
+}
+
+
+def _find_key(obj, key, depth=0):
+    """First value stored under `key` anywhere in a nested plist."""
+    if depth > 8:
+        return None
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for v in obj.values():
+            hit = _find_key(v, key, depth + 1)
+            if hit is not None:
+                return hit
+    elif isinstance(obj, list):
+        for v in obj:
+            hit = _find_key(v, key, depth + 1)
+            if hit is not None:
+                return hit
+    return None
+
+
+def description_report(master_fields: list[dict], holder: str) -> list[str]:
+    """What the embedded description field holds, without leaking custom text.
+
+    Blank values and known camera defaults are printed; anything else is
+    summarised as length/word count only, since the build log is public.
+    """
+    import plistlib
+    lines = []
+    n = 0
+    for f in master_fields:
+        v = (f.get("mediaMetaDataEnc") or {}).get("value")
+        if not isinstance(v, str):
+            continue
+        try:
+            meta = plistlib.loads(base64.b64decode(v))
+        except Exception:
+            continue
+        desc = _find_key(meta, "ImageDescription")
+        if desc is None:
+            continue
+        n += 1
+        text = str(desc)
+        norm = " ".join(text.split()).lower()
+        if norm in _CAMERA_DEFAULT_DESCRIPTIONS:
+            what = "blank" if not norm else f"camera default {text.strip()!r}"
+        else:
+            what = f"custom text: {len(text.strip())} chars, {len(text.split())} words"
+        artist = _find_key(meta, "Artist")
+        copy = _find_key(meta, "Copyright")
+        h = holder.lower()
+        who = (f"photographer field matches site name: {bool(artist) and h in str(artist).lower()}; "
+               f"copyright field matches: {bool(copy) and h in str(copy).lower()}")
+        lines.append(f"  photo {n}: description {what}; {who}")
+    return [f"embedded description field present on {n} photo(s):"] + lines
+
+
 def gps_report(paths: list[Path]) -> list[str]:
     """Count downloaded files that carry EXIF GPS coordinates (yes/no only)."""
     from collections import Counter
@@ -433,6 +496,10 @@ def fetch_cloudkit_album(token: str, session: requests.Session | None = None) ->
         print("Location report (field names, types and counts only):")
         print(f"  record types returned: {record_types}")
         for line in location_report(published_af, published_mf):
+            print("  " + line)
+        cfg = json.loads((ROOT / "config.json").read_text())
+        holder = cfg.get("copyright_holder") or cfg.get("name") or ""
+        for line in description_report(published_mf, holder):
             print("  " + line)
         print(f"  image source used: {dict(Counter(i['source'] for i in items))}")
         print(f"  photos with a caption/title: {sum(1 for i in items if i['caption'])}/{len(items)}")

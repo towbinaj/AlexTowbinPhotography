@@ -317,3 +317,19 @@ def test_post_caption_titles_single_photo_posts_only():
     caps = {i["checksum"]: i["caption"] for i in items}
     assert caps == {"orig-m1": "Lake Shore", "orig-m2": "", "orig-m3": "", "orig-m4": ""}
     assert all("_batch" not in i for i in items)
+
+
+def test_description_report_prints_defaults_but_never_custom_text():
+    import plistlib
+    def mf(desc, artist="Alex Towbin"):
+        meta = {"{TIFF}": {"ImageDescription": desc, "Artist": artist, "Copyright": "(c) Alex Towbin"}}
+        return {"mediaMetaDataEnc": {"value": base64.b64encode(plistlib.dumps(meta, fmt=plistlib.FMT_BINARY)).decode()}}
+    out = "\n".join(build.description_report(
+        [mf("                               "), mf("SONY DSC"), mf("Secret rooftop on Elm St", artist="Someone")],
+        "Alex Towbin"))
+    assert "present on 3 photo(s)" in out
+    assert "photo 1: description blank" in out
+    assert "camera default 'SONY DSC'" in out
+    assert "custom text: 24 chars, 5 words" in out
+    assert "photographer field matches site name: False" in out
+    assert "Secret" not in out and "Elm" not in out

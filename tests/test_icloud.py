@@ -355,7 +355,8 @@ def test_model_normalize_rejects_junk():
     assert d == {"titles": {"a": "Shine a Light"}, "order": ["a", "b"],
                  "collections": [{"name": "Chicago at Night", "photos": ["a", "b"]},
                                  {"name": "Other", "photos": ["d"]}],
-                 "highlights": ["a"], "tags": [], "photo_tags": {}, "locations": {}}
+                 "highlights": ["a"], "tags": [], "photo_tags": {}, "locations": {},
+                 "hidden": [], "published": []}
 
 
 def test_model_apply_change_moves_between_collections_and_reorders():
@@ -521,3 +522,56 @@ def test_model_bulk_tags_collection_and_place():
     assert colls2 == [{"name": "Series", "photos": ["c", "b"]}] and locs2 == ["b"]
     assert msg == '3 photos: tags +Night; collection "Series"; location Florence, Italy'
     assert orig == {"a": ["Street"], "b": ["Night"]}
+
+
+# ---- show on site: hidden / published / drafts_from (site/meta.js <-> build.py) ----
+
+VIS_DATA = {"hidden": ["h", "both"], "published": ["p", "both", "new-released"], "drafts_from": "2026-11-18T16:00:00Z"}
+VIS_CASES = [  # (id, added)
+    ("old", "2026-11-01T10:00:00Z"), ("new", "2026-11-18T16:00:00Z"), ("newer", "2026-11-19T01:02:03.456Z"),
+    ("h", "2026-01-01T00:00:00Z"), ("p", "2027-01-01T00:00:00Z"), ("both", "2027-01-01T00:00:00Z"),
+    ("new-released", "2026-12-01T00:00:00Z"), ("noadded", ""), ("junk", "yesterday"),
+    ("offset", "2026-11-18T12:00:00-05:00"), ("offset-before", "2026-11-18T10:59:00-05:00"), ("dateonly", "2026-11-19"),
+]
+
+
+def test_visibility_matches_js_and_rules(tmp_path):
+    import shutil, subprocess
+    cur = tmp_path / "curation.json"
+    cur.write_text(json.dumps(VIS_DATA))
+    vis = build.visibility(cur)
+    py = [build.is_shown(i, a, vis) for i, a in VIS_CASES]
+    assert dict(zip([i for i, _ in VIS_CASES], py)) == {
+        "old": True, "new": False, "newer": False, "h": False, "p": True, "both": False,
+        "new-released": True, "noadded": True, "junk": True, "offset": False, "offset-before": True, "dateonly": False}
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"drafts_from": "soon", "hidden": "h", "published": [1]}))
+    assert all(build.is_shown(i, a, build.visibility(bad)) for i, a in VIS_CASES)
+    node = shutil.which("node")
+    if not node:
+        return
+    root = Path(__file__).resolve().parent.parent
+    script = ("require(process.argv[1]);const M=require(process.argv[2]);const [d,c]=JSON.parse(process.argv[3]);"
+              "const v=M.visibility(d);process.stdout.write(JSON.stringify(c.map(([i,a])=>M.isShown(i,a,v))));")
+    out = subprocess.run([node, "-e", script, str(root / "site" / "titlecase.js"), str(root / "site" / "meta.js"),
+                          json.dumps([VIS_DATA, VIS_CASES])], capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == py
+
+
+def test_model_show_hide_overrides_date_rule():
+    script = """
+    let d = M.normalize({drafts_from: '2026-11-18T16:00:00Z', hidden: ['a'], published: []}, cleanTitle);
+    const P = (id, added) => ({id, added});
+    const before = [M.isShown(d, P('a','2026-01-01')), M.isShown(d, P('n','2026-12-01T00:00:00Z'))];
+    let n = M.applyChange(d, {id:'a', shown:true}, cleanTitle);
+    n = M.applyChange(n, {id:'n', shown:true}, cleanTitle);
+    const b = M.applyBulk(n, ['a','x'], {shown:false}, cleanTitle);
+    process.stdout.write(JSON.stringify([before, M.isShown(n, P('a','2026-01-01')), M.isShown(n, P('n','2026-12-01T00:00:00Z')),
+      n.hidden, n.published, b.hidden, b.published, M.describe(d, n, 'a'), M.describeBulk(['a','x'], {shown:false}),
+      JSON.parse(M.serialize(n)).drafts_from, M.normalize({drafts_from:'nope'}, cleanTitle).drafts_from === undefined]));
+    """
+    before, a_after, n_after, hid, pub, bhid, bpub, msg, bmsg, df, bad_df = _node_model(script)
+    assert before == [False, False] and a_after is True and n_after is True
+    assert hid == [] and pub == ["a", "n"] and bhid == ["a", "x"] and bpub == ["n"]
+    assert msg == "Photo a: shown on site" and bmsg == "2 photos: hidden from site"
+    assert df == "2026-11-18T16:00:00Z" and bad_df is True

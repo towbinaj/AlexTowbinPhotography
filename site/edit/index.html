@@ -69,6 +69,8 @@
       <button type="button" class="btn ghost small" id="bulk-tags" disabled>Tags</button>
       <button type="button" class="btn ghost small" id="bulk-coll" disabled>Collection</button>
       <button type="button" class="btn ghost small" id="bulk-place" disabled>Location</button>
+      <button type="button" class="btn ghost small" id="bulk-show" disabled>Show</button>
+      <button type="button" class="btn ghost small" id="bulk-hide" disabled>Hide</button>
     </div>
   </section>
 
@@ -117,6 +119,7 @@
     </header>
     <figure class="photo"><img id="detail-img" alt="" draggable="false"></figure>
     <form class="fields" id="detail-form" autocomplete="off" novalidate>
+      <label class="toggle showrow"><input id="f-shown" type="checkbox"> <span>Show on site</span><span class="mono shownote" id="f-shown-note"></span></label>
       <label class="field"><span class="mono">Title</span>
         <input id="f-title" type="text" maxlength="200" placeholder="No title — the date is shown" enterkeyhint="done"></label>
       <div class="row">

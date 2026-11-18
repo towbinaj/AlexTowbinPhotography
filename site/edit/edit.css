@@ -171,4 +171,13 @@ form.inline { margin-top: 14px; flex-wrap: nowrap; }
 .staterow .sub { text-align: right; }
 #bulktags .results { padding-bottom: 110px; }
 
+/* ---------- show on site ---------- */
+.tile.hidden .frame img { opacity: .35; }
+.meta.hid { color: var(--bad); }
+.showrow > span:first-of-type { white-space: nowrap; }
+.showrow { padding: 4px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.showrow .shownote { margin-left: auto; color: var(--muted); text-transform: none; letter-spacing: .02em; text-align: right; }
+.showrow.off { border-color: var(--bad); }
+.showrow.off .shownote { color: var(--bad); }
+
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

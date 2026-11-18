@@ -96,7 +96,8 @@
     const untitled = all.filter((p) => !doc.titles[p.id]).length;
     const loose = all.filter((p) => !M.collectionOf(doc, p.id)).length;
     const noPlace = all.filter((p) => !doc.locations[p.id]).length;
-    const out = [["all", `All ${all.length}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
+    const hiddenN = all.filter((p) => !M.isShown(doc, p)).length;
+    const out = [["all", `All ${all.length}`], ["hidden", `Hidden ${hiddenN}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
     doc.collections.forEach((c, i) => out.push(["c" + i, `${c.name} ${c.photos.filter((id) => all.some((p) => p.id === id)).length}`]));
     return out;
   }
@@ -116,6 +117,7 @@
     const list = ordered();
     if (f === "untitled") return list.filter((p) => !doc.titles[p.id]);
     if (f === "noplace") return list.filter((p) => !doc.locations[p.id]);
+    if (f === "hidden") return list.filter((p) => !M.isShown(doc, p));
     if (f === "high") return list.filter((p) => doc.highlights.includes(p.id));
     if (f === "none") return list.filter((p) => !M.collectionOf(doc, p.id));
     if (f[0] === "c") {
@@ -153,6 +155,8 @@
       const img = new Image(); img.loading = "lazy"; img.decoding = "async"; img.draggable = false; img.alt = "";
       img.src = thumb(p, 180); img.width = p.w; img.height = p.h;
       const frame = el("span", "frame"); frame.appendChild(img);
+      const hiddenNow = !M.isShown(doc, p);
+      if (hiddenNow) a.classList.add("hidden");
       const title = doc.titles[p.id];
       const cap = el("span", "cap" + (title ? "" : " untitled"), title || monthYear(p.taken));
       const c = M.collectionOf(doc, p.id);
@@ -161,6 +165,7 @@
       const pl = doc.locations[p.id], tg = doc.photo_tags[p.id] || [];
       const meta2 = el("span", "meta mono", [pl ? Meta.placeLabel(pl) : "", tg.length ? `${tg.length} tag${tg.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ") || "No location");
       a.append(frame, cap, meta, meta2);
+      if (hiddenNow) a.appendChild(el("span", "meta mono hid", "Hidden · not on the site"));
       a.setAttribute("aria-label", (title || "Untitled photo") + (c ? `, ${c.name} number ${c.pos}` : "") + (star ? ", highlighted" : ""));
       grid.appendChild(a);
     });
@@ -176,7 +181,7 @@
   let pendingTags = [], pendingPlace = null;
   function values() {
     const coll = $("f-coll").value === NEW ? M.cleanName($("f-newcoll").value, clean) : $("f-coll").value;
-    return { title: clean($("f-title").value), collection: coll, cpos: $("f-cpos").value, high: $("f-high").checked, mpos: $("f-mpos").value,
+    return { title: clean($("f-title").value), collection: coll, cpos: $("f-cpos").value, high: $("f-high").checked, mpos: $("f-mpos").value, shown: $("f-shown").checked,
       tags: pendingTags.join("\n"), place: Meta.placeKey(pendingPlace) };
   }
   function dirty() { const v = values(); return !!base && Object.keys(v).some((k) => String(v[k]) !== String(base[k])); }
@@ -216,6 +221,8 @@
     $("f-newcoll").value = "";
     fillCollPos();
     $("f-high").checked = doc.highlights.includes(p.id);
+    $("f-shown").checked = M.isShown(doc, p);
+    shownNote();
     pendingTags = (doc.photo_tags[p.id] || []).slice();
     pendingPlace = doc.locations[p.id] || null;
     $("f-tag-in").value = "";
@@ -259,6 +266,7 @@
       if (v.collection) change.collectionPos = Number(v.cpos) || null;
     }
     if (v.high !== base.high) change.highlight = v.high;
+    if (v.shown !== base.shown) change.shown = v.shown;
     if (v.tags !== base.tags) change.tags = pendingTags.slice();
     if (v.place !== base.place) change.place = pendingPlace;
     if (String(v.mpos) !== String(base.mpos)) {
@@ -284,6 +292,13 @@
   });
   for (const id of ["f-title", "f-cpos", "f-high", "f-mpos", "f-newcoll"]) $(id).addEventListener("input", refreshSave);
   $("f-high").addEventListener("change", refreshSave);
+  function shownNote() {
+    const on = $("f-shown").checked, p = shown[current];
+    const draftByDate = p && !doc.hidden.includes(p.id) && !doc.published.includes(p.id) && !M.isShown(doc, p);
+    $("f-shown-note").textContent = on ? "On the site" : draftByDate ? "New · hidden until released" : "Hidden: not on the site";
+    $("f-shown").closest(".showrow").classList.toggle("off", !on);
+  }
+  $("f-shown").addEventListener("change", () => { shownNote(); refreshSave(); });
   $("f-coll").addEventListener("change", () => { fillCollPos(); refreshSave(); if ($("f-coll").value === NEW) $("f-newcoll").focus(); });
   $("back").addEventListener("click", () => { if (dirty() && !confirm("Discard unsaved changes?")) return; location.hash = ""; });
   $("prev").addEventListener("click", () => step(-1));
@@ -455,7 +470,7 @@
   function selUpdate() {
     const n = selected.size;
     $("sel-count").textContent = n ? `${n} selected` : "Tap photos";
-    for (const id of ["bulk-tags", "bulk-coll", "bulk-place"]) $(id).disabled = !n;
+    for (const id of ["bulk-tags", "bulk-coll", "bulk-place", "bulk-show", "bulk-hide"]) $(id).disabled = !n;
     $("sel-all").textContent = shown.length && shown.every((p) => selected.has(p.id)) ? "Select none" : "Select all";
   }
   function setSelecting(on) {
@@ -574,6 +589,8 @@
   });
 
   // Location: the same place picker, applied to all selected photos.
+  $("bulk-show").addEventListener("click", () => { listStatus("Saving…"); bulkSave({ shown: true }, "list"); });
+  $("bulk-hide").addEventListener("click", () => { listStatus("Saving…"); bulkSave({ shown: false }, "list"); });
   $("bulk-place").addEventListener("click", () => {
     const n = selected.size;
     picker.open((pl) => bulkSave({ place: pl }, "list"), "list", `Location · ${n} photo${n === 1 ? "" : "s"}`);

@@ -191,6 +191,10 @@ slideshow fix (outgoing slide wipes out in step, next image preloaded);
 hover styles only for mouse (iOS sticky hover); **builds run hourly** at :17
 (owner wanted new photos sooner), originals cache saved only when the photo
 set changes (`actions/cache/restore` + `save`, key = hash of file names).
+**Show on site (branch):** per-photo Show toggle and bulk Show/Hide in the
+app. Owner chose *new photos start hidden* and *unlisted, instant release*
+(not private). Data: `hidden`, `published`, `drafts_from` (set to the time
+the feature was added); rule shared by site/app/build, parity-tested.
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

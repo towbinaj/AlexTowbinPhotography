@@ -46,6 +46,11 @@ owner's iCloud shared album, processes them, and builds a static site into
   Never put a key in the repo or the build. Titles are title-cased by both
   `title_case()` (build.py) and `site/titlecase.js`; keep them identical
   (shared cases in `tests/titlecase_cases.json`).
+- **Show on site:** `hidden` / `published` / `drafts_from` in curation.json;
+  photos added after `drafts_from` start hidden (owner chose this). Hidden =
+  unlisted, not private (owner chose instant release over privacy): still in
+  photos.json with `draft: true`, but left out of the gallery, JSON-LD and
+  og image. Rule in `site/meta.js` `isShown()` = `is_shown()` in build.py.
 - **Locations are city / state-region / country only** (owner's rule). Never
   store or publish coordinates or anything finer; picks come from the
   built-in GeoNames list so names stay standard. The `located` flag (photo

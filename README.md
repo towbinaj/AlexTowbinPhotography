@@ -137,6 +137,15 @@ background) and opens full screen.
   kept its location (yes/no only).
 - **Search** (top of the grid) by title, place, tag or collection; filters
   include *Untitled* and *No location*.
+- **Show on site:** photos you add to the album from now on **start hidden**
+  (the grid marks them *Hidden · not on the site*; the *Hidden* filter lists
+  them). Open one and tick **Show on site**, or select several and tap
+  **Show**, to release them; untick / **Hide** pulls a photo back. Either
+  way it takes effect on the site within about 5 minutes. Hidden photos are
+  left off the gallery, slideshow, collections and search-engine data, but
+  they are **not private**: their image files are still on the site (that's
+  what lets the editor show them and makes releasing instant), so someone
+  who knows where to look could find them.
 - **Several photos at once:** tap **Select**, tap the photos (or *Select
   all* for the current filter/search), then use the bar at the bottom:
   - **Tags:** each tag shows ✓ (all selected have it), – (some) or empty;
@@ -144,6 +153,7 @@ background) and opens full screen.
   - **Collection:** pick one, create a new one, or *No collection*. Photos
     already in it keep their place; the rest go at the end in main page order.
   - **Location:** pick a place for all of them.
+  - **Show / Hide:** release or pull back all of them.
   Each is one save.
 - **Face ID lock:** when you first connect, *Lock the editor with Face ID*
   is ticked: the app then asks for Face ID every time it opens and after 5

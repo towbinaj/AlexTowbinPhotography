@@ -7,7 +7,10 @@
 //     "highlights":  ["<id>", …],                        // shown on the main page / hero
 //     "tags":        ["Architecture", …],                // the tag library
 //     "photo_tags":  { "<id>": ["Architecture", …] },    // only names from the library
-//     "locations":   { "<id>": place }                   // see site/meta.js (city/region/country)
+//     "locations":   { "<id>": place },                  // see site/meta.js (city/region/country)
+//     "hidden":      ["<id>", …],                        // pulled back: not on the site
+//     "published":   ["<id>", …],                        // released (overrides drafts_from)
+//     "drafts_from": "2026-11-18T16:45:00Z"              // photos added after this start hidden
 //   }
 // Everything read from the repo is untrusted and goes through normalize().
 (function (root) {
@@ -81,8 +84,15 @@
         if (pl) locations[k] = pl;
       }
     }
-    return { titles, order: idList(d.order), collections, highlights: idList(d.highlights), tags, photo_tags, locations };
+    const vis = Meta.visibility(d);
+    const out = { titles, order: idList(d.order), collections, highlights: idList(d.highlights), tags, photo_tags, locations,
+      hidden: idList(d.hidden), published: idList(d.published) };
+    if (vis.from !== null) out.drafts_from = d.drafts_from;
+    return out;
   }
+
+  // Is this photo shown on the site? (same rule as the site and the build)
+  const isShown = (doc, p) => Meta.isShown(p.id, p.added, Meta.visibility(doc));
 
   const copy = (doc) => ({
     titles: { ...doc.titles },
@@ -92,6 +102,9 @@
     tags: doc.tags.slice(),
     photo_tags: Object.fromEntries(Object.entries(doc.photo_tags).map(([k, v]) => [k, v.slice()])),
     locations: { ...doc.locations },
+    hidden: doc.hidden.slice(),
+    published: doc.published.slice(),
+    ...(doc.drafts_from ? { drafts_from: doc.drafts_from } : {}),
   });
 
   // ---- tag library ----
@@ -202,6 +215,12 @@
       const pl = Meta.cleanPlace(change.place);
       if (pl) out.locations[id] = pl; else delete out.locations[id];
     }
+    if (has(change, "shown")) {
+      // Explicit either way, so it overrides the drafts_from rule.
+      out.hidden = out.hidden.filter((x) => x !== id);
+      out.published = out.published.filter((x) => x !== id);
+      (change.shown ? out.published : out.hidden).push(id);
+    }
     if (change.mainPos != null && Array.isArray(change.mainIds)) {
       const ids = change.mainIds.filter((x) => x !== id);
       ids.splice(clampPos(change.mainPos, ids.length + 1) - 1, 0, id);
@@ -226,6 +245,7 @@
       }
       if (has(op, "collection")) change.collection = op.collection || "";
       if (has(op, "place")) change.place = op.place;
+      if (has(op, "shown")) change.shown = !!op.shown;
       out = applyChange(out, change, cleanTitle);
     }
     return out;
@@ -237,6 +257,7 @@
     if ((op.removeTags || []).length) parts.push(`tags -${op.removeTags.join(", -")}`);
     if (has(op, "collection")) parts.push(op.collection ? `collection "${op.collection}"` : "no collection");
     if (has(op, "place")) parts.push(op.place ? `location ${Meta.placeLabel(op.place)}` : "location removed");
+    if (has(op, "shown")) parts.push(op.shown ? "shown on site" : "hidden from site");
     return `${ids.length} photo${ids.length === 1 ? "" : "s"}: ${parts.join("; ") || "no change"}`;
   }
 
@@ -254,6 +275,9 @@
     if (g0 !== g1) parts.push(g1 ? `tags ${(after.photo_tags[id] || []).join(", ")}` : "tags removed");
     const l0 = Meta.placeKey(before.locations[id]), l1 = Meta.placeKey(after.locations[id]);
     if (l0 !== l1) parts.push(l1 ? `location ${Meta.placeLabel(after.locations[id])}` : "location removed");
+    const s0 = before.published.includes(id) ? 1 : before.hidden.includes(id) ? -1 : 0;
+    const s1 = after.published.includes(id) ? 1 : after.hidden.includes(id) ? -1 : 0;
+    if (s0 !== s1 && s1) parts.push(s1 > 0 ? "shown on site" : "hidden from site");
     const o0 = before.order.indexOf(id), o1 = after.order.indexOf(id);
     if (o0 !== o1 || before.order.length !== after.order.length) parts.push(`main page #${o1 + 1}`);
     return `Photo ${id}: ${parts.join(", ") || "no change"}`;
@@ -264,11 +288,12 @@
     const titles = Object.fromEntries(Object.keys(doc.titles).sort().map((k) => [k, doc.titles[k]]));
     const sortKeys = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
     return JSON.stringify({ titles, order: doc.order, collections: doc.collections, highlights: doc.highlights,
-      tags: doc.tags, photo_tags: sortKeys(doc.photo_tags), locations: sortKeys(doc.locations) }, null, 2) + "\n";
+      tags: doc.tags, photo_tags: sortKeys(doc.photo_tags), locations: sortKeys(doc.locations),
+      hidden: doc.hidden, published: doc.published, ...(doc.drafts_from ? { drafts_from: doc.drafts_from } : {}) }, null, 2) + "\n";
   }
 
   const api = { normalize, orderPhotos, collectionOf, applyChange, describe, serialize, cleanName, MAX_NAME,
-    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk };
+    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown };
   root.EditModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -500,7 +500,12 @@
     const rawCollections = isObj(live) ? live.collections : cfg.collections;
     const rawHighlights = isObj(live) ? live.highlights : cfg.highlights;
     applyConfig(cfg);
-    allPhotos = photos = Array.isArray(list) ? applyLive(list, live) : [];
+    // Hidden photos (not released, or pulled back in the editor) are left out
+    // everywhere: gallery, slideshow, collections. Live rule when the data repo
+    // answered, else the flag baked in at build.
+    const vis = isObj(live) ? window.PhotoMeta.visibility(live) : null;
+    const listed = Array.isArray(list) ? applyLive(list, live) : [];
+    allPhotos = photos = listed.filter((p) => (vis ? window.PhotoMeta.isShown(p.id, p.added, vis) : !p.draft));
     cursor();
     if (!photos.length) { $("empty").hidden = false; $("hero-media").hidden = true; return; }
     hero(highlightsFrom(rawHighlights));

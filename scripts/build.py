@@ -747,6 +747,42 @@ def load_highlights(path: Path = CURATION, known: set[str] | None = None) -> lis
     return out
 
 
+# ---- show on site (kept identical to visibility()/isShown() in site/meta.js) ----
+_ISO = re.compile(r"\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?")
+
+
+def _iso_time(v) -> float | None:
+    if not isinstance(v, str) or not _ISO.fullmatch(v):
+        return None
+    try:
+        dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:  # like JS Date.parse: date-only = UTC, date-time without zone = local (UTC in CI)
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def visibility(path: Path = CURATION) -> dict:
+    """hidden / published id sets and the drafts_from time from curation.json."""
+    data = _read_json(path)
+    d = data if isinstance(data, dict) else {}
+
+    def ids(v):
+        return {x for x in (v[:MAX_ORDER] if isinstance(v, list) else []) if isinstance(x, str) and 0 < len(x) <= MAX_ID}
+    return {"hidden": ids(d.get("hidden")), "published": ids(d.get("published")), "from": _iso_time(d.get("drafts_from"))}
+
+
+def is_shown(pid: str, added: str, vis: dict) -> bool:
+    """Pulled back -> hidden; released -> shown; added at/after drafts_from -> hidden (draft); else shown."""
+    if pid in vis["hidden"]:
+        return False
+    if pid in vis["published"]:
+        return True
+    t = _iso_time(added)
+    return not (vis["from"] is not None and t is not None and t >= vis["from"])
+
+
 def apply_meta(entries: list[dict], tags: dict[str, list[str]], places: dict[str, dict]) -> None:
     for e in entries:
         if tags.get(e["id"]):
@@ -811,12 +847,13 @@ def build(photos: list[Photo], config: dict) -> None:
     meta = rights_metadata(r)
     entries = []
     og_written = False
+    vis = visibility()
     for p in photos:
         e = render_images(p, OUT, trim=config.get("trim_white_borders", False), meta=meta)
         if not e:
             continue
         im = e.pop("_im")
-        if not og_written:  # social-preview image (JPEG for widest compatibility)
+        if not og_written and is_shown(p.id, p.added, vis):  # social preview: a shown photo only
             og = im.copy()
             og.thumbnail((1200, 1200))
             og.save(OUT / "img" / "og.jpg", "JPEG", quality=82, exif=meta[0], xmp=meta[1])
@@ -825,6 +862,13 @@ def build(photos: list[Photo], config: dict) -> None:
 
     apply_titles(entries, titles)
     apply_meta(entries, *load_meta())
+    # Hidden photos stay in photos.json (the editor shows them, and releasing
+    # one is instant) but are flagged, left out of the JSON-LD and never used
+    # for the link preview. Not private: see README.
+    for e in entries:
+        if not is_shown(e["id"], e.get("added", ""), vis):
+            e["draft"] = True
+    shown = [e for e in entries if not e.get("draft")]
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
     cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,
                collections=load_collections(known={e["id"] for e in entries}),
@@ -841,7 +885,7 @@ def build(photos: list[Photo], config: dict) -> None:
                      .replace("{{DESCRIPTION}}", desc)
                      .replace("{{AUTHOR}}", html.escape(r["holder"]))
                      .replace("{{COPYRIGHT}}", html.escape(r["notice"]))
-                     .replace("{{JSONLD}}", json_ld(entries, config, r, site_url))
+                     .replace("{{JSONLD}}", json_ld(shown, config, r, site_url))
                      .replace("{{OG_IMAGE}}", f"{site_url}/img/og.jpg" if og_written else ""))
     (OUT / ".nojekyll").write_text("")
     print(f"Built {len(entries)} photos into {OUT}")

@@ -59,7 +59,26 @@
     return p.level === "city" ? "c:" + p.gid : p.level === "region" ? "r:" + p.code : "n:" + p.cc;
   }
 
-  const api = { cleanTag, cleanPlace, placeLabel, placeKey, MAX_TAG };
+  // Show on site? (kept identical to visibility()/is_shown() in build.py)
+  //   hidden: [ids]       always hidden (pulled back)
+  //   published: [ids]    always shown (released)
+  //   drafts_from: ISO    photos added to the album at/after this start hidden
+  // Everything else is shown. Untrusted input: bad values are ignored.
+  const ISO = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+  function visibility(data) {
+    const d = isObj(data) ? data : {};
+    const ids = (v) => new Set(Array.isArray(v) ? v.slice(0, 5000).filter((x) => typeof x === "string" && x.length > 0 && x.length <= 64) : []);
+    const from = typeof d.drafts_from === "string" && ISO.test(d.drafts_from) ? Date.parse(d.drafts_from) : NaN;
+    return { hidden: ids(d.hidden), published: ids(d.published), from: Number.isFinite(from) ? from : null };
+  }
+  function isShown(id, added, vis) {
+    if (vis.hidden.has(id)) return false;
+    if (vis.published.has(id)) return true;
+    const t = typeof added === "string" && ISO.test(added) ? Date.parse(added) : NaN;
+    return !(vis.from !== null && Number.isFinite(t) && t >= vis.from);
+  }
+
+  const api = { cleanTag, cleanPlace, placeLabel, placeKey, MAX_TAG, visibility, isShown };
   root.PhotoMeta = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

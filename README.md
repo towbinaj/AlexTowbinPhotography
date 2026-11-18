@@ -136,7 +136,16 @@ background) and opens full screen.
   kept its location (yes/no only).
 - **Search** (top of the grid) by title, place, tag or collection; filters
   include *Untitled* and *No location*.
-- **Key** (top right): see the expiry date, replace or forget the key.
+- **Face ID lock:** when you first connect, *Lock the editor with Face ID*
+  is ticked: the app then asks for Face ID every time it opens and after 5
+  minutes in the background. On iPhones with iOS 18 or later, Face ID also
+  **encrypts** the stored key, so it can't be read from the phone without
+  your face (Key settings say "On"). On older systems it only guards opening
+  the app ("On (app only)"). It uses a passkey saved in your iCloud Keychain;
+  turn it on or off under **Key**. If Face ID can't unlock (e.g. the passkey
+  was deleted), tap *Can't unlock?* and paste the key again.
+- **Key** (top right): see the expiry date, replace or forget the key, and
+  turn the Face ID lock on or off.
 
 Locations and collections show on the site within minutes (see below). Tags
 stay private to the app (for your own sorting and search); search engines get

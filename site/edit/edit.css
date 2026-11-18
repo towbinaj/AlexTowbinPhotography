@@ -140,4 +140,7 @@ form.inline { margin-top: 14px; flex-wrap: nowrap; }
 .tagrow .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tagrow .n { color: var(--muted); }
 
+.card.center { text-align: center; justify-items: center; }
+.linkish { color: var(--muted); text-decoration: underline; text-underline-offset: .2em; font: inherit; text-transform: none; letter-spacing: .02em; }
+
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

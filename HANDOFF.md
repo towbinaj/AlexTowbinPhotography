@@ -172,7 +172,17 @@ from live data, baked fallback in `config.json` `collections`
 **Highlights (branch):** the hero slideshow shows highlighted photos in main
 page order (max 12; live data, baked fallback `config.json` `highlights`,
 `load_highlights()`); none → old newest+random behavior.
-Still to do: optional Face ID lock;
+**Face ID lock (branch):** `site/edit/lock.js`. A platform passkey
+(WebAuthn, userVerification required, no server). With the PRF extension
+(iOS 18+), HKDF(PRF secret) → AES-GCM encrypts the GitHub key; only the
+ciphertext is stored (`at-lock` in localStorage), the plaintext lives in
+memory while unlocked. Without PRF: "gate" mode (UI lock only; key stored as
+before). Locks on open and after 5 min hidden. Safari needs the WebAuthn call
+right after a tap, so setup runs Face ID before the GitHub key check (undone
+if the key fails). Tested with Chromium's virtual authenticator (note: after
+one failed UV it refuses until recreated; a test quirk). The site's `#edit`
+has no Face ID: retire it.
+Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the
 main page/hero, build-side validation of the new fields); then remove `#edit`.

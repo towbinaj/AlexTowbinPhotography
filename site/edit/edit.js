@@ -69,7 +69,7 @@
   };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const ordered = () => M.orderPhotos(all, doc.order);
-  function show(id) { for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen"]) $(s).hidden = s !== id; }
+  function show(id) { for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen", "lock"]) $(s).hidden = s !== id; }
   const Meta = window.PhotoMeta;
   const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -474,7 +474,7 @@
     else if (location.hash === "#tags") { tagStatus(""); renderTagScreen(); show("tagscreen"); }
     else { renderList(); show("list"); }
   }
-  addEventListener("hashchange", () => { if (getKey() && all.length) route(); });
+  addEventListener("hashchange", () => { if (!locked && getKey() && all.length) route(); });
 
   // ---------------- setup & settings ----------------
   function openSetup(replacing) {
@@ -484,6 +484,7 @@
     $("setup-exp").value = exp && exp !== "never" ? exp : "";
     $("setup-exp").disabled = $("setup-noexp").checked;
     $("setup-cancel").hidden = !replacing;
+    $("setup-faceid-wrap").hidden = !lockAvailable || L.enabled();
     show("setup");
     $("setup-key").focus();
   }
@@ -495,27 +496,100 @@
     const exp = $("setup-noexp").checked ? "never" : $("setup-exp").value;
     if (!k) { err.textContent = "Paste the key first."; return; }
     if (!exp) { err.textContent = "Enter the expiry date, or tick “No expiration”."; return; }
+    // Face ID first: Safari only shows its prompt right after a tap.
+    const wasLocked = L.enabled(), oldLock = wasLocked ? localStorage.getItem("at-lock") : null;
+    const newLock = !wasLocked && lockAvailable && $("setup-faceid").checked;
+    try {
+      if (wasLocked && L.mode() === "prf") { err.textContent = "Confirm with Face ID…"; await L.rekey(k); }
+      else if (newLock) { err.textContent = "Set up Face ID…"; await L.enable(k); }
+    } catch (e2) {
+      err.textContent = `Face ID didn't finish (${e2.name === "NotAllowedError" ? "cancelled" : e2.message || e2.name}). Try again${newLock ? ", or untick “Lock the editor with Face ID”" : ""}.`;
+      return;
+    }
+    const undo = () => { if (newLock) L.disable(); else if (oldLock) localStorage.setItem("at-lock", oldLock); };
     err.textContent = "Checking…";
     try {
       const r = await fetch(api(""), { headers: headers(k), cache: "no-store" });
-      if (!r.ok) { err.textContent = r.status === 401 ? "GitHub didn't accept that key." : "That key can't see the photo data repository."; return; }
+      if (!r.ok) { undo(); err.textContent = r.status === 401 ? "GitHub didn't accept that key." : "That key can't see the photo data repository."; return; }
       const j = await r.json();
-      if (!j.permissions || !j.permissions.push) { err.textContent = "That key can read but not save. It needs Contents: read and write."; return; }
-    } catch { err.textContent = "Couldn't reach GitHub. Check your connection and try again."; return; }
-    mem.key = k; mem.exp = exp; store.set(KEY, k); store.set(EXP, exp);
+      if (!j.permissions || !j.permissions.push) { undo(); err.textContent = "That key can read but not save. It needs Contents: read and write."; return; }
+    } catch { undo(); err.textContent = "Couldn't reach GitHub. Check your connection and try again."; return; }
+    mem.exp = exp; store.set(EXP, exp);
+    if (L.mode() === "prf") store.del(KEY); else store.set(KEY, k); // prf: only the encrypted copy stays on the device
+    mem.key = k;
     await loadDoc();
   });
+  function fillLockSettings() {
+    const mode = L.mode();
+    $("s-lock").textContent = mode === "prf" ? "On" : mode === "gate" ? "On (app only)" : lockAvailable ? "Off" : "Not available";
+    $("s-lock-note").textContent = mode === "prf" ? "Face ID opens the editor, and your key is stored encrypted: it can't be read from this device without Face ID."
+      : mode === "gate" ? "Face ID opens the editor. This device can't use Face ID to encrypt the key, so it's stored as before."
+      : lockAvailable ? "Turn on to require Face ID whenever the editor opens (and after 5 minutes away)." : "This device or browser doesn't offer Face ID / passkeys to websites.";
+    $("s-lock-btn").textContent = mode ? "Turn off Face ID" : "Turn on Face ID";
+    $("s-lock-btn").hidden = !mode && !lockAvailable;
+    $("s-err").textContent = "";
+  }
   $("open-settings").addEventListener("click", () => {
     $("s-repo").textContent = repo;
     $("s-exp").textContent = expiryInfo().text;
+    fillLockSettings();
     show("settings");
+  });
+  $("s-lock-btn").addEventListener("click", async () => {
+    const k = getKey();
+    if (!k) return;
+    if (L.enabled()) {
+      if (!confirm("Turn off the Face ID lock? Your key stays on this device, unencrypted.")) return;
+      store.set(KEY, k); L.disable();
+    } else {
+      try {
+        $("s-err").textContent = "Set up Face ID…";
+        if (await L.enable(k) === "prf") store.del(KEY);
+      } catch (e) { fillLockSettings(); $("s-err").textContent = `Face ID wasn't set up (${e.message || e.name}).`; return; }
+    }
+    fillLockSettings();
   });
   $("s-close").addEventListener("click", () => route());
   $("s-replace").addEventListener("click", () => openSetup(true));
   $("s-forget").addEventListener("click", () => {
     if (!confirm("Forget the key on this device? You'll need to paste it again to edit.")) return;
-    store.del(KEY); store.del(EXP); mem.key = mem.exp = "";
+    store.del(KEY); store.del(EXP); mem.key = mem.exp = ""; L.disable();
     openSetup(false);
+  });
+
+  // ---------------- Face ID lock ----------------
+  // See lock.js. Locks on open and after 5 minutes in the background.
+  const L = window.EditLock, RELOCK_MS = 5 * 60 * 1000;
+  let lockAvailable = false, locked = false, hiddenAt = 0;
+  function showLock() {
+    locked = true;
+    if (L.mode() === "prf") mem.key = ""; // the decrypted key only lives in memory while unlocked
+    $("lock-err").textContent = "";
+    show("lock");
+    $("lock-open").focus();
+  }
+  $("lock-open").addEventListener("click", async () => {
+    $("lock-err").textContent = "";
+    $("lock-open").disabled = true;
+    try {
+      const k = await L.unlock();
+      if (k) mem.key = k;
+      if (!getKey()) throw new Error("No key on this device. Use the link below to connect again.");
+      locked = false;
+      if (doc && sha !== undefined && all.length) route(); else await loadDoc();
+    } catch (err) {
+      $("lock-err").textContent = err.name === "NotAllowedError" ? "Face ID was cancelled or didn't match. Try again." : (err.message || "Couldn't unlock.");
+    } finally { $("lock-open").disabled = false; }
+  });
+  $("lock-reset").addEventListener("click", () => {
+    if (!confirm("Forget the key and the Face ID lock on this device? You'll paste the key again to edit.")) return;
+    L.disable(); store.del(KEY); mem.key = ""; locked = false;
+    openSetup(false);
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!L.enabled()) return;
+    if (document.hidden) hiddenAt = Date.now();
+    else if (!locked && hiddenAt && Date.now() - hiddenAt > RELOCK_MS) showLock();
   });
 
   // ---------------- boot ----------------
@@ -538,6 +612,11 @@
     all = Array.isArray(list) ? list.filter((p) => p && typeof p.id === "string" && Array.isArray(p.src) && p.src.length) : [];
     $("setup-repo").textContent = repo || "the photo data repository";
     if (!repo) { $("boot").textContent = "The editor works on the published site only."; return; }
-    if (!getKey()) openSetup(false); else loadDoc();
+    L.available().then((ok) => {
+      lockAvailable = ok;
+      if (L.enabled()) showLock();
+      else if (!getKey()) openSetup(false);
+      else loadDoc();
+    });
   });
 })();

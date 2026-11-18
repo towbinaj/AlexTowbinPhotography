@@ -35,6 +35,7 @@
       <label class="field"><span class="mono">Expires on</span>
         <input id="setup-exp" type="date"></label>
       <label class="check"><input id="setup-noexp" type="checkbox"> <span>No expiration</span></label>
+      <label class="check" id="setup-faceid-wrap" hidden><input id="setup-faceid" type="checkbox" checked> <span>Lock the editor with Face ID</span></label>
       <p class="mono hint">GitHub doesn't tell the app when a key expires, so enter the date you chose. The app warns you two weeks ahead.</p>
       <p class="err mono" id="setup-err" role="alert"></p>
       <div class="actions">
@@ -150,8 +151,12 @@
       <dl class="facts mono">
         <div><dt>Repository</dt><dd id="s-repo"></dd></div>
         <div><dt>Expires</dt><dd id="s-exp"></dd></div>
+        <div><dt>Face ID lock</dt><dd id="s-lock"></dd></div>
       </dl>
+      <p class="mono hint" id="s-lock-note"></p>
+      <p class="err mono" id="s-err" role="alert"></p>
       <div class="actions wrap">
+        <button type="button" class="btn ghost" id="s-lock-btn"></button>
         <button type="button" class="btn ghost" id="s-forget">Forget key</button>
         <button type="button" class="btn ghost" id="s-replace">Replace key</button>
         <button type="button" class="btn" id="s-close">Done</button>
@@ -160,11 +165,23 @@
     </div>
   </section>
 
+  <!-- Face ID lock -->
+  <section class="screen setup" id="lock" hidden aria-labelledby="lock-h">
+    <div class="card center">
+      <p class="mono eyebrow">Alex Towbin · Editor</p>
+      <h1 id="lock-h">Locked</h1>
+      <button type="button" class="btn" id="lock-open">Unlock with Face ID</button>
+      <p class="err mono" id="lock-err" role="alert"></p>
+      <p class="mono hint"><button type="button" class="linkish" id="lock-reset">Can't unlock? Forget the key on this device</button></p>
+    </div>
+  </section>
+
   <p class="boot mono" id="boot">Loading…</p>
 
   <script src="../titlecase.js"></script>
   <script src="../meta.js"></script>
   <script src="model.js"></script>
+  <script src="lock.js"></script>
   <script src="edit.js"></script>
 </body>
 </html>

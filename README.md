@@ -54,11 +54,11 @@ Edit `config.json`:
 | `data_repo` | `owner/repo` holding `curation.json` (titles + order); the editor saves there |
 
 ### Photo titles and order
-Titles and the order of the photos are set on the site itself. Titles appear
-under the photo and in the full-screen view; photos without a title show the
-month they were taken.
+Titles, order, collections, highlights, tags and locations are all set in
+the **editor app** (below). Titles appear under the photo and in the
+full-screen view; photos without a title show the month they were taken.
 
-**One-time setup on each device you edit from:**
+**The key the app needs (once per device):**
 1. On GitHub, create a key: *Settings → Developer settings → Personal access
    tokens → Fine-grained tokens → Generate new token*
    (or open https://github.com/settings/personal-access-tokens/new).
@@ -66,15 +66,11 @@ month they were taken.
      (the photo data repository, not the site's). The key can't touch the
      site's code, its build, or the album link.
    - **Permissions:** *Contents* → **Read and write**. Nothing else.
-   - **Expiration:** your choice. When it expires, saving says so; make a new key.
-2. Open the site with `#edit` at the end of the address
-   (e.g. `…/AlexTowbinPhotography/#edit`) and paste the key.
+   - **Expiration:** your choice; the app warns two weeks ahead.
+2. Open the editor app and paste the key (see below).
 
-**Editing:** open any photo. Type its title in the field under it, and/or
-change its **No.** (its position, 1 = first) and tap **Save**. Visitors see
-it within about 5 minutes (the page reads the data live; no rebuild). Clear the title and save to remove it. Put your strongest
-photo first and your second-strongest last. Tap **Done** to hide the editor;
-visiting with `#edit` turns it back on.
+Saves reach visitors within about 5 minutes (the page reads the data live; no
+rebuild). Put your strongest photo first and your second-strongest last.
 
 Photos you add to the album later appear **first** until you give them a
 position, so new work is easy to spot.
@@ -84,8 +80,9 @@ major words capitalized; *a, an, the, and, of, in, on, to* and similar short
 words lowercase unless they start or end the title (or a part of it around
 "/", ":" or "—"). Words you capitalize yourself, like "NYC" or "iPhone", are
 kept as typed.
-The key is stored only in that browser (*Forget key* removes it), and visitors
-never see the editor.
+The key stays on your phone (encrypted by Face ID where supported), and
+visitors never see the editor. (The site's older `#edit` mode was removed;
+the app replaces it.)
 
 Everything (also collections and highlights from the phone app) is saved to `curation.json` in the separate, public data repository
 [towbinaj/AlexTowbinPhotographyData](https://github.com/towbinaj/AlexTowbinPhotographyData)

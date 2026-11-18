@@ -35,9 +35,9 @@ owner's iCloud shared album, processes them, and builds a static site into
 - **Low maintenance.** The owner's only workflow is adding and removing photos
   in the shared album. Don't add steps that need manual upkeep (e.g. expiring
   API tokens).
-- **Photo titles and order are set on the site** (owner chose this; `#edit` mode, a
-  fine-grained GitHub key with Contents read/write on this repo only, stored in
-  the owner's browser) — the key is scoped to the **data repo**
+- **Photo titles and order are set in the editor app** (`site/edit/`, owner's
+  phone; the old `#edit` mode was removed). It uses a fine-grained GitHub key
+  (Face ID-locked, encrypted where the device supports it) scoped to the **data repo**
   `towbinaj/AlexTowbinPhotographyData` only. Saves write `curation.json`
   (`{titles, order, collections, highlights, tags, photo_tags, locations}`) there via the GitHub API; the page reads it live from
   raw.githubusercontent.com and the build bakes it in (CI checks it out into

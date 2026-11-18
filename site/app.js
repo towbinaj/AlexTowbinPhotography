@@ -256,7 +256,6 @@
     $("lb-caption").textContent = label;
     $("lb-info").textContent = label; // phones: own line (the bar is too narrow)
     $("lb-info").hidden = !label;
-    if (editor.on) editor.show(p);
     history.replaceState(null, "", `#photo-${p.id}`);
     for (const d of [1, -1]) { // warm the neighbours
       const n = photos[(current + d + photos.length) % photos.length];
@@ -322,14 +321,14 @@
   $("lb-stage").addEventListener("click", (e) => { if (e.target === e.currentTarget) closePhoto(); });
   const typing = (t) => t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
   document.addEventListener("keydown", (e) => {
-    if (lb.hidden || !$("edit-setup").hidden) return;
+    if (lb.hidden) return;
     if (typing(e.target)) { if (e.key === "Escape") e.target.blur(); return; }
     if (e.key === "Escape") closePhoto();
     else if (e.key === "ArrowLeft") step(-1);
     else if (e.key === "ArrowRight") step(1);
   });
   let tx = null, ty = null;
-  lb.addEventListener("touchstart", (e) => { if (e.target.closest(".lb-edit")) { tx = null; return; } if (e.touches.length === 1) { tx = e.touches[0].clientX; ty = e.touches[0].clientY; } }, { passive: true });
+  lb.addEventListener("touchstart", (e) => { if (e.touches.length === 1) { tx = e.touches[0].clientX; ty = e.touches[0].clientY; } }, { passive: true });
   lb.addEventListener("touchend", (e) => {
     if (tx === null) return;
     const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
@@ -342,198 +341,9 @@
   document.addEventListener("contextmenu", (e) => { if (guarded(e.target)) e.preventDefault(); });
   document.addEventListener("dragstart", (e) => { if (guarded(e.target)) e.preventDefault(); });
 
-  // ---------------- title editor (owner only) ----------------
-  // Visiting the site with #edit asks for a GitHub key (kept in this browser
-  // only). While editing is on, the lightbox shows title and position fields;
-  // saving writes curation.json ({titles, order}) in the photo data repo
-  // (config "data_repo"), which the page reads live. The key only needs
-  // access to that repo, never to the site's code.
-  const editor = (() => {
-    const KEY = "at-data-key", ON = "at-title-edit";
-    const store = {
-      get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-      set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: lasts this visit */ } },
-      del(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
-    };
-    try { localStorage.removeItem("at-title-key"); } catch { /* old site-repo key: no longer used */ }
-    let repo = "", memKey = null;
-    const key = () => store.get(KEY) || memKey;
-    const api = (file = "curation.json") => `https://api.github.com/repos/${repo}/contents/${file}`;
-    const headers = () => ({ Authorization: `Bearer ${key()}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" });
-    const b64enc = (str) => { const bytes = new TextEncoder().encode(str); let bin = ""; for (const b of bytes) bin += String.fromCharCode(b); return btoa(bin); };
-    const b64dec = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
-    const why = (status) =>
-      status === 401 ? "GitHub didn't accept the key (it may have expired). Visit the site with #edit to set a new one." :
-      status === 403 || status === 404 ? "This key can't save to the photo data repository. It needs Contents: read and write on that repository." :
-      status === 409 || status === 422 ? "Someone saved at the same moment. Try again." :
-      `Couldn't save (GitHub error ${status}). Try again.`;
-
-    async function getJSON(file) {
-      const r = await fetch(api(file) + "?ref=main", { headers: headers(), cache: "no-store" });
-      if (r.status === 404) return { exists: false };
-      if (!r.ok) { dropIfRejected(r.status); throw new Error(why(r.status)); }
-      const j = await r.json();
-      let data = null;
-      try { data = JSON.parse(b64dec(j.content || "")); } catch { data = null; }
-      return { exists: true, data, sha: j.sha };
-    }
-    async function readCuration() {
-      const cur = await getJSON("curation.json");
-      const d = cur.exists && isObj(cur.data) ? cur.data : {};
-      return { raw: d, titles: isObj(d.titles) ? d.titles : {}, order: Array.isArray(d.order) ? d.order : [], sha: cur.sha };
-    }
-
-    // change = { id, title, order? }  (order: full list of photo ids, or undefined to leave as is)
-    async function save(change) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const cur = await readCuration();
-        const titles = { ...cur.titles };
-        if (change.title) titles[change.id] = change.title; else delete titles[change.id];
-        const sorted = Object.fromEntries(Object.keys(titles).sort().map((k) => [k, titles[k]]));
-        // Keep fields this editor doesn't know (collections, highlights from the app).
-        const doc = { ...cur.raw, titles: sorted, order: change.order || cur.order };
-        const parts = [];
-        if ((cur.titles[change.id] || "") !== (change.title || "")) parts.push(change.title ? `title "${change.title}"` : "title removed");
-        if (change.order) parts.push(`moved to #${change.order.indexOf(change.id) + 1}`);
-        const body = {
-          message: `Photo ${change.id}: ${parts.join(", ") || "no change"}`,
-          content: b64enc(JSON.stringify(doc, null, 2) + "\n"),
-          branch: "main",
-          ...(cur.sha ? { sha: cur.sha } : {}),
-        };
-        const w = await fetch(api(), { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        if (w.ok) return;
-        if ((w.status === 409 || w.status === 422) && attempt === 0) continue; // file changed underneath us: re-read once
-        dropIfRejected(w.status);
-        throw new Error(why(w.status));
-      }
-    }
-
-    const form = $("lb-edit"), input = $("lb-title"), posIn = $("lb-pos"), status = $("lb-edit-status"), btn = $("lb-title-save");
-    const setStatus = (msg, err) => { status.textContent = msg; status.classList.toggle("err", !!err); };
-
-    function applyLocally(p, title) {
-      p.caption = title;
-      const i = photos.indexOf(p);
-      const cap = tiles[i] && tiles[i].querySelector(".cap");
-      if (cap) cap.textContent = title || monthYear(p.taken);
-      if (tiles[i]) tiles[i].setAttribute("aria-label", title ? `Open: ${title}` : `Open photo ${i + 1}`);
-      if (photos[current] === p) {
-        $("lb-caption").textContent = [title, monthYear(p.taken)].filter(Boolean).join(" — ");
-        lbImg.alt = title;
-      }
-    }
-
-    function moveLocally(p, to) {
-      const from = photos.indexOf(p);
-      photos.splice(from, 1);
-      photos.splice(to, 0, p);
-      tiles.length = 0;
-      buildTiles();
-      layout();
-      current = to;
-      fillBar();
-    }
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const p = photos[current];
-      if (!p) return;
-      const title = window.cleanTitle(input.value);
-      const from = photos.indexOf(p);
-      const want = Math.round(Number(posIn.value));
-      if (!Number.isFinite(want) || want < 1 || want > photos.length) {
-        setStatus(`Position must be 1–${photos.length}.`, true); return;
-      }
-      const to = want - 1;
-      let order;
-      if (to !== from) {
-        const ids = photos.map((x) => x.id).filter((id) => id !== p.id);
-        ids.splice(to, 0, p.id);
-        order = ids;
-      }
-      if (title === (p.caption || "") && order === undefined) { setStatus("Nothing to save."); return; }
-      btn.disabled = true; setStatus("Saving…");
-      try {
-        await save({ id: p.id, title, order });
-        applyLocally(p, title);
-        if (order) moveLocally(p, to);
-        input.value = title;
-        setStatus("Saved · live in ~5 min");
-      } catch (err) {
-        setStatus(err.message || "Couldn't save. Try again.", true);
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    const setup = $("edit-setup"), keyIn = $("edit-key"), errEl = $("edit-error");
-    function openSetup() {
-      keyIn.value = ""; errEl.textContent = "";
-      $("edit-forget").hidden = !key();
-      keyIn.placeholder = key() ? "Key saved — paste a new one to replace it" : "github_pat_…";
-      setup.hidden = false;
-      keyIn.focus();
-    }
-    const closeSetup = () => { setup.hidden = true; };
-    // GitHub rejected the saved key (expired or regenerated): drop it so the
-    // next visit with #edit asks for the new one.
-    const dropIfRejected = (status) => { if (status === 401) { store.del(KEY); memKey = null; } };
-
-    $("edit-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const k = keyIn.value.trim();
-      if (!k) { errEl.textContent = "Paste the key first."; return; }
-      errEl.textContent = "Checking…";
-      try {
-        const r = await fetch(`https://api.github.com/repos/${repo}`, { headers: { ...headers(), Authorization: `Bearer ${k}` }, cache: "no-store" });
-        if (!r.ok) { errEl.textContent = r.status === 401 ? "GitHub didn't accept that key." : "That key can't see the photo data repository."; return; }
-        const j = await r.json();
-        if (j.permissions && j.permissions.push === false) { errEl.textContent = "That key can read but not save. It needs Contents: read and write."; return; }
-      } catch {
-        errEl.textContent = "Couldn't reach GitHub. Check your connection and try again."; return;
-      }
-      memKey = k; store.set(KEY, k);
-      closeSetup(); turnOn();
-    });
-    $("edit-cancel").addEventListener("click", () => { closeSetup(); if (key()) turnOn(); });
-    $("edit-forget").addEventListener("click", () => { store.del(KEY); memKey = null; turnOff(); closeSetup(); });
-    $("edit-done").addEventListener("click", () => turnOff());
-
-    const api_ = {
-      on: false,
-      show(p) {
-        input.value = p.caption || "";
-        posIn.value = photos.indexOf(p) + 1;
-        posIn.max = photos.length;
-        $("lb-pos-of").textContent = `of ${photos.length}`;
-        setStatus("");
-      },
-      init(cfg) {
-        repo = (cfg && cfg.data_repo) || "";
-        if (location.hash === "#edit") {
-          history.replaceState(null, "", location.pathname + location.search);
-          if (!repo) { alert("Title editing works on the published site only."); return; }
-          openSetup(); // always: lets a replaced key be pasted; Cancel keeps a saved one
-        } else if (repo && key() && store.get(ON) === "1") {
-          turnOn();
-        }
-      },
-    };
-    function turnOn() {
-      groups.select(null); $("collections").classList.add("off"); // positions refer to the full list
-      api_.on = true; store.set(ON, "1");
-      form.hidden = false; $("edit-pill").hidden = false;
-      if (!lb.hidden && photos[current]) api_.show(photos[current]);
-    }
-    function turnOff() {
-      $("collections").classList.remove("off");
-      api_.on = false; store.del(ON);
-      form.hidden = true; $("edit-pill").hidden = true;
-    }
-    addEventListener("hashchange", () => { if (location.hash === "#edit") api_.init({ data_repo: repo }); });
-    return api_;
-  })();
+  // Editing lives in the editor app (/edit/). The old #edit mode is gone; drop
+  // what it left in this browser (its GitHub key and on/off flag).
+  try { for (const k of ["at-data-key", "at-title-key", "at-title-edit"]) localStorage.removeItem(k); } catch { /* ignore */ }
 
   // ---------------- live titles & order (data repo) ----------------
   // photos.json has the titles/order baked in at the last build. The page also
@@ -690,6 +500,5 @@
     groups.init(rawCollections);
     const m = location.hash.match(/^#photo-(.+)$/);
     if (m) openPhoto(photos.findIndex((p) => p.id === m[1]), null);
-    editor.init(cfg);
   });
 })();

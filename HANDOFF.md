@@ -181,7 +181,9 @@ before). Locks on open and after 5 min hidden. Safari needs the WebAuthn call
 right after a tap, so setup runs Face ID before the GitHub key check (undone
 if the key fails). Tested with Chromium's virtual authenticator (note: after
 one failed UV it refuses until recreated; a test quirk). The site's `#edit`
-has no Face ID: retire it.
+had no Face ID, so it was **removed** (2026-11-18); the site also clears the
+old key it left in that browser (same-origin `at-data-key`; note this also
+clears an unlocked app key in the same browser, never the home-screen app's).
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

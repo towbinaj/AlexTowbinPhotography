@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://raw.githubusercontent.com https://api.github.com; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://raw.githubusercontent.com; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{TITLE}}</title>
@@ -113,36 +113,6 @@
         <button type="button" id="lb-close" aria-label="Close">Close</button>
       </span>
     </div>
-    <form class="lb-edit mono" id="lb-edit" hidden autocomplete="off" novalidate>
-      <label for="lb-title">Title</label>
-      <input id="lb-title" type="text" maxlength="200" placeholder="No title — the date is shown" enterkeyhint="done">
-      <label for="lb-pos" class="lb-pos-label">No.</label>
-      <span class="lb-pos"><input id="lb-pos" type="number" inputmode="numeric" min="1" step="1" enterkeyhint="done" aria-describedby="lb-pos-of"><span id="lb-pos-of"></span></span>
-      <button type="submit" id="lb-title-save">Save</button>
-      <span class="lb-edit-status" id="lb-edit-status" role="status" aria-live="polite"></span>
-    </form>
-  </div>
-
-  <!-- Title editing (owner only; appears after visiting the site with #edit) -->
-  <div class="edit-pill mono" id="edit-pill" hidden>
-    <span>Editing titles — open a photo</span>
-    <button type="button" id="edit-done">Done</button>
-  </div>
-  <div class="edit-setup" id="edit-setup" role="dialog" aria-modal="true" aria-labelledby="edit-setup-h" hidden>
-    <form class="edit-card" id="edit-form" autocomplete="off">
-      <h2 id="edit-setup-h">Edit titles on this device</h2>
-      <p>Paste your GitHub key. It's kept only in this browser and used only to save
-         titles and order to the photo data repository.</p>
-      <p class="mono edit-help"><a id="edit-key-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a key on GitHub ↗</a>
-         — only the photo data repository, with “Contents: read and write”.</p>
-      <input id="edit-key" type="password" placeholder="github_pat_…" spellcheck="false" autocapitalize="off">
-      <p class="edit-error mono" id="edit-error" role="alert"></p>
-      <div class="edit-actions mono">
-        <button type="button" id="edit-forget" hidden>Forget key</button>
-        <button type="button" id="edit-cancel">Cancel</button>
-        <button type="submit" id="edit-save">Save key</button>
-      </div>
-    </form>
   </div>
 
   <script src="titlecase.js"></script>

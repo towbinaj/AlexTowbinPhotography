@@ -223,38 +223,3 @@ body.has-cursor .cursor.big span { opacity: 1; }
   html { scroll-behavior: auto; }
 }
 
-/* ---------------- title editor (owner only, via #edit) ---------------- */
-.lightbox { grid-template-rows: 1fr auto auto; }
-.lb-edit { display: flex; align-items: center; gap: 12px; padding: 0 var(--pad) calc(16px + env(safe-area-inset-bottom)); color: var(--muted); font-size: 12px; letter-spacing: .06em; }
-.lb-edit[hidden], .edit-pill[hidden], .edit-setup[hidden] { display: none; }
-.lb-edit label { text-transform: uppercase; }
-.lb-edit input, .edit-card input { flex: 1; min-width: 0; background: transparent; color: var(--fg); border: 0; border-bottom: 1px solid var(--line); padding: 8px 2px; font: 400 16px/1.3 var(--sans); outline: none; }
-.lb-edit input:focus, .edit-card input:focus { border-bottom-color: var(--accent); }
-.lb-edit button, .edit-pill button, .edit-actions button { background: none; border: 1px solid var(--line); color: var(--fg); padding: 7px 14px; border-radius: 999px; font: inherit; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
-.lb-edit button:hover, .edit-pill button:hover, .edit-actions button:hover { border-color: var(--fg); }
-.lb-edit button:disabled { opacity: .5; cursor: progress; }
-.lb-edit-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lb-edit-status.err { color: #e08a7a; }
-.edit-pill { position: fixed; z-index: 60; left: var(--pad); bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-2); color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-.edit-setup { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: var(--pad); background: rgba(8, 8, 7, .82); }
-.edit-card { width: min(460px, 100%); display: grid; gap: 14px; padding: 28px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; }
-.edit-card h2 { margin: 0; font: 400 30px/1.1 var(--serif); }
-.edit-card p { margin: 0; color: var(--muted); line-height: 1.5; }
-.edit-help { font-size: 12px; }
-.edit-help a { color: var(--fg); text-decoration: underline; text-underline-offset: .2em; }
-.edit-error { min-height: 1em; color: #e08a7a; font-size: 12px; }
-.edit-actions { display: flex; justify-content: flex-end; gap: 10px; font-size: 11px; }
-.edit-actions #edit-forget { margin-right: auto; }
-@media (max-width: 560px) {
-  .lb-edit { flex-wrap: wrap; }
-  .lb-edit label { display: none; }
-  .lb-edit input { flex-basis: 100%; }
-  .lb-edit-status { flex: 1 0 100%; white-space: normal; }
-}
-.lightbox:not([hidden]) ~ .edit-pill { display: none; }
-.lb-pos { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
-.lb-edit .lb-pos input { flex: none; width: 3.2em; text-align: center; -moz-appearance: textfield; }
-.lb-pos input::-webkit-outer-spin-button, .lb-pos input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-@media (max-width: 560px) {
-  .lb-edit .lb-pos-label { display: inline; }
-}

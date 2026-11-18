@@ -40,7 +40,9 @@ owner's iCloud shared album, processes them, and builds a static site into
   the owner's browser). Saves write `curation.json` (`{titles, order}`) via
   the GitHub API, which triggers a deploy. Unplaced (new) photos sort first. Titles are optional: untitled photos show the date. Apple
   captions/comments are not reachable through the public album link (tested).
-  Never put a key in the repo or the build.
+  Never put a key in the repo or the build. Titles are title-cased by both
+  `title_case()` (build.py) and `site/titlecase.js`; keep them identical
+  (shared cases in `tests/titlecase_cases.json`).
 - **Instagram (@towbinaj)** is linked, not embedded. A live feed needs a
   Meta token that expires every 60 days, which was rejected.
 - Design: dark, editorial, modern. Not a template look.
@@ -50,7 +52,7 @@ owner's iCloud shared album, processes them, and builds a static site into
 config.json                 site settings (name, tagline, about, sort, copyright…)
 curation.json               {titles: {id: title}, order: [ids]}, written by the site's #edit mode
 scripts/build.py            iCloud fetch → image processing → _site/
-site/index.html|style.css|app.js|robots.txt   static front end (no framework, no build step)
+site/index.html|style.css|app.js|titlecase.js|robots.txt   static front end (no framework, no build step)
 tests/test_icloud.py        offline tests (fake iCloud responses; no network)
 .github/workflows/deploy.yml  test → build → deploy to Pages
 ```

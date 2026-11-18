@@ -75,6 +75,12 @@ visiting with `#edit` turns it back on.
 
 Photos you add to the album later appear **first** until you give them a
 position, so new work is easy to spot.
+
+Titles are always shown in **title case** ("shine a light" → "Shine a Light"):
+major words capitalized; *a, an, the, and, of, in, on, to* and similar short
+words lowercase unless they start or end the title (or a part of it around
+"/", ":" or "—"). Words you capitalize yourself, like "NYC" or "iPhone", are
+kept as typed.
 The key is stored only in that browser (*Forget key* removes it), and visitors
 never see the editor.
 

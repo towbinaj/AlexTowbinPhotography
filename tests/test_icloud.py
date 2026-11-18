@@ -218,10 +218,10 @@ def test_load_curation_falls_back_to_legacy_titles_and_dedupes_order(tmp_path):
     legacy.write_text('{"a": "Old", "b": "Old b"}')
     cur.write_text('{"titles": {"b": "New b", "c": 3}, "order": ["x", "y", "x", 7, "z"]}')
     titles, order = build.load_curation(cur, legacy)
-    assert titles == {"b": "New b"}          # once curation.json exists, the old file is ignored
+    assert titles == {"b": "New B"}          # once curation.json exists, the old file is ignored
     assert order == ["x", "y", "z"]
     cur.write_text("garbage")
-    assert build.load_curation(cur, legacy) == ({"a": "Old", "b": "Old b"}, [])
+    assert build.load_curation(cur, legacy) == ({"a": "Old", "b": "Old B"}, [])
 
 
 def test_apply_order_places_known_photos_and_puts_new_ones_first():
@@ -230,3 +230,34 @@ def test_apply_order_places_known_photos_and_puts_new_ones_first():
     out = build.apply_order(auto, ["a", "b", "c", "gone"])  # "gone" was removed from the album
     assert [p.id for p in out] == ["n2", "n1", "a", "b", "c"]
     assert build.apply_order(auto, []) == auto
+
+
+# ---- title case (same cases are checked against site/titlecase.js) ----
+
+def test_title_case_cases():
+    import json
+    cases = json.loads((Path(__file__).parent / "titlecase_cases.json").read_text())
+    for raw, want in cases:
+        assert build.title_case(raw) == want, raw
+
+
+def test_saved_titles_are_title_cased(tmp_path):
+    cur = tmp_path / "curation.json"
+    cur.write_text('{"titles": {"a": "shine a light"}, "order": []}')
+    assert build.load_curation(cur, tmp_path / "none.json")[0] == {"a": "Shine a Light"}
+
+
+def test_title_case_js_matches_python():
+    import json, shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node not installed")
+    root = Path(__file__).resolve().parent.parent
+    script = ("const tc=require(process.argv[1]);const cases=require(process.argv[2]);"
+              "process.stdout.write(JSON.stringify(cases.map(([r])=>tc(r))));")
+    out = subprocess.run([node, "-e", script, str(root / "site" / "titlecase.js"),
+                          str(root / "tests" / "titlecase_cases.json")],
+                         capture_output=True, text=True, check=True).stdout
+    cases = json.loads((root / "tests" / "titlecase_cases.json").read_text())
+    assert json.loads(out) == [want for _, want in cases]

@@ -430,7 +430,7 @@
       e.preventDefault();
       const p = photos[current];
       if (!p) return;
-      const title = input.value.replace(/\s+/g, " ").trim().slice(0, 200);
+      const title = window.titleCase(input.value.replace(/\s+/g, " ").trim().slice(0, 200));
       const from = photos.indexOf(p);
       const want = Math.round(Number(posIn.value));
       if (!Number.isFinite(want) || want < 1 || want > photos.length) {

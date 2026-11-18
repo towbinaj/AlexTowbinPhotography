@@ -511,12 +511,52 @@ LEGACY_TITLES = ROOT / "titles.json"  # older editor format: {id: title}
 MAX_TITLE = 200
 
 
+
+# Title case (kept identical to titleCase() in site/app.js).
+# Short words stay lowercase unless they start or end a part of the title;
+# parts are split by "/", ":", "—" and "–". Words with capitals after the
+# first letter (NYC, iPhone, McQueen) are left exactly as typed.
+SMALL_WORDS = {"a", "an", "the", "and", "but", "or", "nor", "for", "so", "yet",
+               "as", "at", "by", "in", "of", "off", "on", "per", "to", "up", "via", "vs"}
+_TC_SPLIT = re.compile(r"(\s+|/|:|—|–)")
+
+
+def _tc_word(word: str, edge: bool) -> str:
+    parts = word.split("-")
+    out = []
+    for i, part in enumerate(parts):
+        letters = [c for c in part if c.isalpha()]
+        core = "".join(letters).lower()
+        if any(c.isupper() for c in letters[1:]):
+            out.append(part)                       # deliberate capitals: keep
+        elif core in SMALL_WORDS and not (edge and i == 0):
+            out.append(part.lower())
+        else:
+            low = part.lower()
+            j = next((k for k, c in enumerate(low) if c.isalpha()), None)
+            out.append(low if j is None else low[:j] + low[j].upper() + low[j + 1:])
+    return "-".join(out)
+
+
+def title_case(text: str) -> str:
+    tokens = _TC_SPLIT.split(" ".join(text.split()))
+    words = [i for i, t in enumerate(tokens) if t and not _TC_SPLIT.fullmatch(t)]
+    breaks = {i for i, t in enumerate(tokens) if t in ("/", ":", "—", "–")}
+    for n, i in enumerate(words):
+        prev_w = words[n - 1] if n else None
+        next_w = words[n + 1] if n + 1 < len(words) else None
+        first = prev_w is None or any(prev_w < b < i for b in breaks)
+        last = next_w is None or any(i < b < next_w for b in breaks)
+        tokens[i] = _tc_word(tokens[i], first or last)
+    return "".join(tokens)
+
+
 def _clean_titles(data) -> dict[str, str]:
     out = {}
     if isinstance(data, dict):
         for k, v in data.items():
             if isinstance(k, str) and isinstance(v, str) and v.strip():
-                out[k] = " ".join(v.split())[:MAX_TITLE]
+                out[k] = title_case(" ".join(v.split())[:MAX_TITLE])
     return out
 
 

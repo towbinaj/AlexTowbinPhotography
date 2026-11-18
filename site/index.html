@@ -62,13 +62,8 @@
 
     <section class="work" id="work" aria-label="Photographs">
       <div class="work-head">
-        <h2 class="section-title">Selected <em>work</em></h2>
-        <div class="search" id="search-wrap" role="search" hidden>
-          <input id="search" type="search" placeholder="Search places, tags, titles" aria-label="Search photographs" list="search-list" enterkeyhint="search" autocomplete="off" spellcheck="false">
-          <datalist id="search-list"></datalist>
-          <button type="button" class="search-clear mono" id="search-clear" hidden aria-label="Clear search">Clear</button>
-          <span class="search-count mono" id="search-count" aria-live="polite"></span>
-        </div>
+        <h2 class="section-title" id="work-title">Selected <em>work</em></h2>
+        <nav class="collections mono" id="collections" aria-label="Collections" hidden></nav>
         <div class="view-toggle mono" role="group" aria-label="Layout">
           <button type="button" data-view="stream" aria-pressed="true">Stream</button>
           <button type="button" data-view="grid" aria-pressed="false">Index</button>

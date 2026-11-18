@@ -479,3 +479,16 @@ def test_model_tag_library_rename_merges_and_delete_clears():
     assert r4t == ["Street", "Night", "Rain", "Brand New"] and r4c == ["Brand New", "Street"]
     assert r4l == {"level": "country", "country": "Italy", "cc": "IT"} and n == 1
     assert orig == ["Street", "Night", "Rain"]
+
+
+def test_load_collections_matches_site_rules(tmp_path):
+    cur = tmp_path / "curation.json"
+    cur.write_text(json.dumps({"collections": [
+        {"name": "florence at night", "photos": ["a", "b", "a", "gone"]},
+        {"name": "FLORENCE AT NIGHT", "photos": ["c"]},          # duplicate name
+        {"name": "Other", "photos": ["b", "c"]},                  # b already used
+        {"name": "", "photos": ["d"]}, {"name": "Empty", "photos": []}, "junk",
+    ]}))
+    assert build.load_collections(cur, known={"a", "b", "c", "d"}) == [
+        {"name": "Florence at Night", "photos": ["a", "b"]}, {"name": "Other", "photos": ["c"]}]
+    assert build.load_collections(tmp_path / "missing.json") == []

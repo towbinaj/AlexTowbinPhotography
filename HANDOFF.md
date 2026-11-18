@@ -158,7 +158,19 @@ environment for this) and **showing both on the site with search**. Data:
 {id: place}; place shapes and cleaning in `site/meta.js` = `clean_place()` /
 `place_label()` / `clean_tag()` in build.py. Labels: "Florence, Italy",
 US cities "Miami, Florida, United States", regions "Tuscany, Italy".
-Search finds English names only (no "Firenze"); small towns → pick region. Not done: Face ID lock
+Search finds English names only (no "Firenze"); small towns → pick region.
+
+**Then (owner, after asking how artist sites do it):** tags are **private**
+(app only + JSON-LD keywords; not shown on the site), place is plain caption
+text ("Title — Florence, Italy — Mar 2026"; phones get it on its own line),
+the site search box was **removed** (bring back if the gallery grows into the
+hundreds), and **collections are the public way to browse**: a nav row above
+the gallery (hidden until a collection exists), `#collection-<slug>` deep
+links, heading becomes the collection name, lightbox steps within it. Built
+from live data, baked fallback in `config.json` `collections`
+(`load_collections()`). `#edit` forces *All* (positions are global).
+Still to do: highlights on the main page/hero; optional Face ID lock;
+remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the
 main page/hero, build-side validation of the new fields); then remove `#edit`.
 The owner wants a small editor on their phone: set a title, assign a photo to

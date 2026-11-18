@@ -709,6 +709,33 @@ def load_meta(path: Path = CURATION) -> tuple[dict[str, list[str]], dict[str, di
     return tags, places
 
 
+MAX_COLLECTION_NAME = 60
+
+
+def load_collections(path: Path = CURATION, known: set[str] | None = None) -> list[dict]:
+    """[{name, photos: [ids in order]}] from curation.json (set in the editor
+    app). Same rules as the page: names cleaned like titles (max 60), no
+    duplicate names, a photo in one collection at most, only known photos."""
+    data = _read_json(path)
+    raw = data.get("collections") if isinstance(data, dict) else None
+    out, names, used = [], set(), set()
+    for c in raw[:100] if isinstance(raw, list) else []:
+        if not isinstance(c, dict):
+            continue
+        name = clean_title(str(c.get("name") or ""))[:MAX_COLLECTION_NAME].strip()
+        if not name or name.lower() in names:
+            continue
+        ids = []
+        for pid in (c.get("photos") or [])[:MAX_ORDER] if isinstance(c.get("photos"), list) else []:
+            if isinstance(pid, str) and 0 < len(pid) <= MAX_ID and pid not in used and (known is None or pid in known):
+                used.add(pid)
+                ids.append(pid)
+        if ids:
+            names.add(name.lower())
+            out.append({"name": name, "photos": ids})
+    return out
+
+
 def apply_meta(entries: list[dict], tags: dict[str, list[str]], places: dict[str, dict]) -> None:
     for e in entries:
         if tags.get(e["id"]):
@@ -789,6 +816,7 @@ def build(photos: list[Photo], config: dict) -> None:
     apply_meta(entries, *load_meta())
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
     cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,
+               collections=load_collections(known={e["id"] for e in entries}),
                **data_settings(config))
     (OUT / "config.json").write_text(json.dumps(cfg))
 

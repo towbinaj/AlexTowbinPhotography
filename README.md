@@ -138,8 +138,9 @@ background) and opens full screen.
   include *Untitled* and *No location*.
 - **Key** (top right): see the expiry date, replace or forget the key.
 
-Tags and locations show on the site right away (see below). Collections and
-highlights are saved but don't change the public site yet; that comes next. New album photos show up in the app after the nightly build.
+Locations and collections show on the site within minutes (see below). Tags
+stay private to the app (for your own sorting and search); search engines get
+them as hidden keywords. Highlights are saved but don't change the site yet. New album photos show up in the app after the nightly build.
 
 ## The site
 - **Opening screen:** your name in large serif type beside a slideshow of
@@ -147,13 +148,15 @@ highlights are saved but don't change the public site yet; that comes next. New 
 - **Stream view:** staggered columns that drift at slightly different speeds
   as you scroll, with photos revealed as they come into view.
 - **Index view:** a dense grid of everything.
-- **Search:** above the gallery; finds photos by place (city, state/region,
-  country), tag or title. Accents and capitals don't matter, and every word
-  must match ("italy street").
-- **Places and tags:** shown under each photo in the full-screen viewer
-  ("Florence, Italy  #Street"); tap one to see all photos with it. Places
-  are city/state/country level only. Search engines also get them
-  (`contentLocation`, `keywords` in the JSON-LD).
+- **Collections:** once you make a collection in the app, links appear above
+  the gallery: *All* plus each collection with its count. Choosing one shows
+  just that series, in its own order, with its name as the heading. Each has
+  its own link (`…/#collection-florence-at-night`) to share. With no
+  collections, nothing extra shows.
+- **Captions:** the full-screen viewer shows *title — place — date*
+  ("Negotiating Escape — Florence, Italy — Mar 2026"), place at
+  city/state/country level as plain text. Search engines also get the place
+  and your tags (`contentLocation`, `keywords` in the JSON-LD).
 - **Full-screen viewer:** the photo grows smoothly from its spot in the
   gallery (View Transitions). Use arrow keys or swipe to move between photos,
   swipe down to close. Each photo has its own shareable link (`#photo-…`).

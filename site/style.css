@@ -117,23 +117,17 @@ body.has-cursor .cursor.big span { opacity: 1; }
 .work-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: clamp(28px, 5vh, 56px); }
 .section-title { margin: 0; font: 400 clamp(44px, 6.5vw, 104px)/.9 var(--serif); letter-spacing: -.03em; }
 .section-title em { color: var(--accent); }
-/* Search */
-.search { position: relative; flex: 1; max-width: 420px; margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.search.off { display: none; }
-.search input {
-  flex: 1; min-width: 0; padding: 10px 16px; font: 300 15px var(--sans); color: var(--fg);
-  background: transparent; border: 1px solid var(--line); border-radius: 999px; -webkit-appearance: none; appearance: none;
-}
-.search input::placeholder { color: var(--muted); }
-.search input:focus { outline: none; border-color: var(--accent); }
-.search input::-webkit-search-cancel-button { -webkit-appearance: none; }
-.search-clear { color: var(--muted); }
-.search-clear:hover { color: var(--fg); }
-.search-count { color: var(--muted); white-space: nowrap; }
-.search-count:empty { display: none; }
+/* Collections (shown only when the owner has made some) */
+.collections { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 18px; }
+.collections.off { display: none !important; }
+.collections button { color: var(--muted); padding: 8px 0; border-bottom: 1px solid transparent; transition: color .2s, border-color .2s; white-space: nowrap; }
+.collections button:hover { color: var(--fg); }
+.collections button[aria-pressed="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.collections .n { margin-left: 6px; color: var(--dim); }
 @media (max-width: 700px) {
   .work-head { flex-wrap: wrap; }
-  .search { order: 3; flex-basis: 100%; max-width: none; margin-left: 0; }
+  .collections { order: 3; flex-basis: 100%; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .collections::-webkit-scrollbar { display: none; }
 }
 
 .view-toggle { display: flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
@@ -200,10 +194,9 @@ body.has-cursor .cursor.big span { opacity: 1; }
 .lb-stage { position: relative; display: flex; align-items: center; justify-content: center; padding: 64px var(--pad) 12px; min-height: 0; touch-action: pan-y pinch-zoom; cursor: zoom-out; }
 .lb-stage img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; cursor: default; view-transition-name: active-photo; }
 .lb-bar { display: grid; grid-template-columns: 1fr 2fr 1fr; align-items: center; gap: 16px; padding: 14px var(--pad) calc(16px + env(safe-area-inset-bottom)); color: var(--muted); }
-.lb-info { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; padding: 4px var(--pad) 0; color: var(--muted); }
-.lb-info button { color: var(--muted); letter-spacing: .06em; transition: color .2s; padding: 4px 0; }
-.lb-info button:hover, .lb-info button:focus-visible { color: var(--fg); }
-.lb-info .lb-place { color: var(--fg); }
+/* Caption line under the photo on phones (the bar hides it there). */
+.lb-info { display: none; padding: 4px var(--pad) 0; text-align: center; color: var(--fg); letter-spacing: .06em; line-height: 1.5; }
+@media (max-width: 600px) { .lb-info:not([hidden]) { display: block; } }
 .lb-credit { margin-left: 14px; color: var(--dim); }
 .lb-caption { text-align: center; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-actions { display: flex; justify-content: flex-end; gap: 22px; }

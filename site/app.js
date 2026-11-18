@@ -11,7 +11,7 @@
     return d && !isNaN(d) ? d.toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "";
   };
 
-  let photos = [];      // what the gallery shows (all, or search results)
+  let photos = [];      // what the gallery shows (all, or one collection)
   let allPhotos = [];
   let view = "stream";
 
@@ -97,7 +97,7 @@
     const slides = picks.map((p, i) => {
       const s = document.createElement("div"); s.className = "slide";
       s.appendChild(makeImg(p, "(max-width: 860px) 100vw, 45vw", i === 0));
-      s.addEventListener("click", () => { if (!photos.includes(p)) search.clear(); openPhoto(photos.indexOf(p), s.firstChild); });
+      s.addEventListener("click", () => { if (!photos.includes(p)) groups.select(null); openPhoto(photos.indexOf(p), s.firstChild); });
       s.style.cursor = "zoom-in";
       media.insertBefore(s, $("hero-index"));
       return s;
@@ -245,31 +245,17 @@
   function fillBar() {
     const p = photos[current];
     $("lb-count").textContent = `${pad2(current + 1)} / ${pad2(photos.length)}`;
-    $("lb-caption").textContent = [p.caption, monthYear(p.taken)].filter(Boolean).join(" — ");
-    fillInfo(p);
+    // Museum-label style: title — place — date. Places are plain text (city/state/country).
+    const label = [p.caption, window.PhotoMeta.placeLabel(p.place), monthYear(p.taken)].filter(Boolean).join(" — ");
+    $("lb-caption").textContent = label;
+    $("lb-info").textContent = label; // phones: own line (the bar is too narrow)
+    $("lb-info").hidden = !label;
     if (editor.on) editor.show(p);
     history.replaceState(null, "", `#photo-${p.id}`);
     for (const d of [1, -1]) { // warm the neighbours
       const n = photos[(current + d + photos.length) % photos.length];
       new Image().src = bestSrc(n, lbTargetWidth(n));
     }
-  }
-
-  // Place and tags under the photo; tapping one searches the gallery for it.
-  function fillInfo(p) {
-    const info = $("lb-info");
-    info.textContent = "";
-    const add = (label, cls, q) => {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = cls; b.textContent = label;
-      b.setAttribute("aria-label", `Show photos: ${q}`);
-      b.addEventListener("click", () => { closePhoto(); search.set(q); });
-      info.appendChild(b);
-    };
-    const label = window.PhotoMeta.placeLabel(p.place);
-    if (label) add(label, "lb-place", label);
-    for (const t of p.tags || []) add("#" + t, "lb-tag", t);
-    info.hidden = !info.childElementCount;
   }
 
   function openPhoto(i, fromImg) {
@@ -314,7 +300,7 @@
       document.body.style.overflow = "";
       if (visible) target.style.viewTransitionName = "active-photo";
     };
-    history.replaceState(null, "", location.pathname + location.search);
+    history.replaceState(null, "", location.pathname + location.search + groups.hash());
     if (document.startViewTransition && visible && !reduceMotion) {
       transition(hide).finished.finally(() => { target.style.viewTransitionName = ""; }).catch(() => {});
     } else {
@@ -529,13 +515,13 @@
       },
     };
     function turnOn() {
-      search.clear(); $("search-wrap").classList.add("off");
+      groups.select(null); $("collections").classList.add("off"); // positions refer to the full list
       api_.on = true; store.set(ON, "1");
       form.hidden = false; $("edit-pill").hidden = false;
       if (!lb.hidden && photos[current]) api_.show(photos[current]);
     }
     function turnOff() {
-      $("search-wrap").classList.remove("off");
+      $("collections").classList.remove("off");
       api_.on = false; store.del(ON);
       form.hidden = true; $("edit-pill").hidden = true;
     }
@@ -596,56 +582,78 @@
       .concat(list.filter((p) => rank.has(p.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id)));
   }
 
-  // ---------------- search ----------------
-  // Filters the gallery by title, place (city, state/region, country) and tag.
-  // Every word must match somewhere; accents and case don't matter.
+  // ---------------- collections ----------------
+  // Named series from the data repo (set in the editor app). When there are
+  // any, a row of links above the gallery switches between "All" and each
+  // collection (shown in its own order); #collection-<name> links to one.
+  // Hidden while there are none. The data is untrusted: names cleaned like
+  // titles, only known photo ids, a photo in one collection at most.
   const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const search = (() => {
-    const input = $("search"), count = $("search-count"), clearBtn = $("search-clear");
-    let q = "", timer;
-    const hay = new Map();
-    function haystack(p) {
-      if (!hay.has(p)) {
-        const pl = p.place || {};
-        hay.set(p, fold([p.caption, monthYear(p.taken), window.PhotoMeta.placeLabel(p.place), pl.city, pl.region, pl.country,
-          ...(p.tags || [])].filter(Boolean).join(" | ")));
-      }
-      return hay.get(p);
-    }
-    function suggestions() {
-      const set = new Set();
-      for (const p of allPhotos) {
-        for (const t of p.tags || []) set.add(t);
-        if (p.place) {
-          set.add(window.PhotoMeta.placeLabel(p.place));
-          if (p.place.region) set.add(p.place.region);
-          set.add(p.place.country);
+  const groups = (() => {
+    const nav = $("collections"), title = $("work-title");
+    const allTitle = Array.from(title.childNodes, (n) => n.cloneNode(true));
+    let list = [], active = null;
+
+    function clean(raw) {
+      const known = new Map(allPhotos.map((p) => [p.id, p])), used = new Set(), names = new Set(), slugs = new Set(), out = [];
+      for (const c of Array.isArray(raw) ? raw.slice(0, 100) : []) {
+        if (!isObj(c)) continue;
+        const name = [...window.cleanTitle(String(c.name || ""))].slice(0, 60).join("").trim();
+        if (!name || names.has(name.toLowerCase())) continue;
+        const items = [];
+        for (const id of Array.isArray(c.photos) ? c.photos.slice(0, 5000) : []) {
+          if (typeof id === "string" && known.has(id) && !used.has(id)) { used.add(id); items.push(known.get(id)); }
         }
+        if (!items.length) continue;
+        names.add(name.toLowerCase());
+        let slug = fold(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "series";
+        for (let n = 2; slugs.has(slug); n++) slug = slug.replace(/-\d+$/, "") + "-" + n;
+        slugs.add(slug);
+        out.push({ name, slug, items });
       }
-      const dl = $("search-list"); dl.textContent = "";
-      for (const v of [...set].sort((a, b) => a.localeCompare(b))) { const o = document.createElement("option"); o.value = v; dl.appendChild(o); }
+      return out;
     }
-    function apply() {
-      const words = fold(q).split(/\s+/).filter(Boolean);
-      photos = words.length ? allPhotos.filter((p) => { const h = haystack(p); return words.every((w) => h.includes(w)); }) : allPhotos;
-      tiles.length = 0;
-      buildTiles();
-      layout();
-      $("empty").hidden = photos.length > 0 || !allPhotos.length;
-      $("empty").textContent = words.length ? "No photographs match that search." : "New photographs coming soon.";
-      count.textContent = words.length ? `${photos.length} of ${allPhotos.length}` : "";
-      clearBtn.hidden = !q;
+    function render() {
+      nav.textContent = "";
+      nav.hidden = !list.length;
+      if (!list.length) return;
+      const add = (label, slug, n) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.setAttribute("aria-pressed", String(active === slug));
+        b.append(label);
+        const c = document.createElement("span"); c.className = "n"; c.textContent = n; b.appendChild(c);
+        b.addEventListener("click", () => api.select(slug, true));
+        nav.appendChild(b);
+      };
+      add("All", null, allPhotos.length);
+      for (const c of list) add(c.name, c.slug, c.items.length);
     }
-    input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { q = input.value.trim(); apply(); }, 120); });
-    input.addEventListener("search", () => { q = input.value.trim(); apply(); });
-    input.addEventListener("keydown", (e) => { if (e.key === "Escape") { api.clear(); input.blur(); } });
-    clearBtn.addEventListener("click", () => { api.clear(); input.focus(); });
     const api = {
-      init() { hay.clear(); suggestions(); $("search-wrap").hidden = !allPhotos.length; },
-      set(v) { input.value = v; q = v; apply(); $("work").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" }); },
-      clear() { if (!q && !input.value) return; input.value = ""; q = ""; apply(); },
-      active: () => !!q,
+      init(raw) {
+        list = clean(raw);
+        const m = location.hash.match(/^#collection-(.+)$/);
+        active = m && list.some((c) => c.slug === m[1]) ? m[1] : null;
+        if (active) api.select(active, true); else render();
+      },
+      select(slug, scroll) {
+        const c = list.find((x) => x.slug === slug) || null;
+        if ((c ? c.slug : null) === active && photos === (c ? c.items : allPhotos)) return;
+        active = c ? c.slug : null;
+        photos = c ? c.items : allPhotos;
+        title.replaceChildren(...(c ? [document.createTextNode(c.name)] : allTitle.map((n) => n.cloneNode(true))));
+        tiles.length = 0;
+        buildTiles();
+        layout();
+        render();
+        if (!/^#photo-/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search + api.hash());
+        if (scroll) $("work").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+      },
+      hash: () => (active ? "#collection-" + active : ""),
     };
+    addEventListener("hashchange", () => {
+      const m = location.hash.match(/^#collection-(.+)$/);
+      if (m) api.select(m[1], true);
+    });
     return api;
   })();
 
@@ -662,6 +670,8 @@
     fetch("photos.json").then((r) => r.json()).catch(() => []),
     cfgReady.then((cfg) => loadLive(cfg.data_url)),
   ]).then(([cfg, list, live]) => {
+    // Live collections when the data repo answered, else the copy baked in at build.
+    const rawCollections = isObj(live) ? live.collections : cfg.collections;
     applyConfig(cfg);
     allPhotos = photos = Array.isArray(list) ? applyLive(list, live) : [];
     cursor();
@@ -670,7 +680,7 @@
     buildTiles();
     lastW = masonry.clientWidth;
     layout();
-    search.init();
+    groups.init(rawCollections);
     const m = location.hash.match(/^#photo-(.+)$/);
     if (m) openPhoto(photos.findIndex((p) => p.id === m[1]), null);
     editor.init(cfg);

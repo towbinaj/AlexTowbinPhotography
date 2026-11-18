@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 * * * *"   # hourly: new album photos show up within about an hour
+    - cron: "17 * * * *"   # hourly: new album photos show up within about an hour.
   workflow_dispatch:        # "Run workflow" button for an immediate refresh
 
 permissions:

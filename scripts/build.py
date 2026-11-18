@@ -495,6 +495,8 @@ def json_ld(entries: list[dict], config: dict, r: dict, site_url: str) -> str:
         "thumbnailUrl": base + e["src"][0]["url"],
         "width": e["w"], "height": e["h"],
         **({"caption": e["caption"]} if e["caption"] else {}),
+        **({"keywords": ", ".join(e["tags"])} if e.get("tags") else {}),
+        **({"contentLocation": {"@type": "Place", "name": place_label(e["place"])}} if e.get("place") else {}),
         "creator": person,
         "copyrightHolder": person,
         "copyrightNotice": r["notice"],
@@ -617,6 +619,104 @@ def load_curation(path: Path = CURATION, legacy: Path = LEGACY_TITLES) -> tuple[
     return titles, order
 
 
+# ---- tags and places (kept identical to site/meta.js; parity-tested) ----
+MAX_TAG = 40
+MAX_PLACE_NAME = 80
+MAX_PHOTO_TAGS = 30
+_CC = re.compile(r"[A-Z]{2}")
+_REGION_CODE = re.compile(r"[A-Z]{2}\.[A-Za-z0-9]{1,10}")
+
+
+def clean_tag(text: str) -> str:
+    return clean_title(text)[:MAX_TAG].strip()
+
+
+def _place_name(v) -> str:
+    if not isinstance(v, str):
+        return ""
+    return " ".join(_CONTROL.sub(" ", v).split())[:MAX_PLACE_NAME].strip()
+
+
+def clean_place(raw) -> dict | None:
+    """City, state/region or country only; anything else (or junk) -> None."""
+    if not isinstance(raw, dict):
+        return None
+    cc = raw.get("cc") if isinstance(raw.get("cc"), str) and _CC.fullmatch(raw["cc"]) else ""
+    country = _place_name(raw.get("country"))
+    if not cc or not country:
+        return None
+    level = raw.get("level")
+    if level == "country":
+        return {"level": "country", "country": country, "cc": cc}
+    region = _place_name(raw.get("region"))
+    if level == "region":
+        code = raw.get("code") if isinstance(raw.get("code"), str) and _REGION_CODE.fullmatch(raw["code"]) else ""
+        return {"level": "region", "code": code, "region": region, "country": country, "cc": cc} if code and region else None
+    if level == "city":
+        city = _place_name(raw.get("city"))
+        gid = raw.get("gid")
+        if isinstance(gid, float) and gid.is_integer():
+            gid = int(gid)
+        if not (isinstance(gid, int) and not isinstance(gid, bool) and 0 < gid < 10**10) or not city:
+            return None
+        out = {"level": "city", "gid": gid, "city": city}
+        if region:
+            out["region"] = region
+        return {**out, "country": country, "cc": cc}
+    return None
+
+
+def place_label(p: dict | None) -> str:
+    """"Florence, Italy" · "Miami, Florida, United States" · "Tuscany, Italy" · "Italy"."""
+    if not p:
+        return ""
+    if p["level"] == "country":
+        return p["country"]
+    if p["level"] == "region":
+        return f"{p['region']}, {p['country']}"
+    return ", ".join(x for x in (p["city"], p.get("region", "") if p["cc"] == "US" else "", p["country"]) if x)
+
+
+def load_meta(path: Path = CURATION) -> tuple[dict[str, list[str]], dict[str, dict]]:
+    """(photo id -> tags, photo id -> place) from curation.json. Only tags that
+    are in the tag library count; bad entries are dropped, never fatal."""
+    data = _read_json(path)
+    if not isinstance(data, dict):
+        return {}, {}
+    library: dict[str, str] = {}
+    for t in (data.get("tags") or [])[:300] if isinstance(data.get("tags"), list) else []:
+        n = clean_tag(t) if isinstance(t, str) else ""
+        if n and n.lower() not in library:
+            library[n.lower()] = n
+    tags: dict[str, list[str]] = {}
+    raw_tags = data.get("photo_tags") if isinstance(data.get("photo_tags"), dict) else {}
+    for pid, names in list(raw_tags.items())[:MAX_ORDER]:
+        if not (isinstance(pid, str) and 0 < len(pid) <= MAX_ID and isinstance(names, list)):
+            continue
+        out: list[str] = []
+        for t in names[:MAX_PHOTO_TAGS]:
+            n = library.get(clean_tag(t).lower()) if isinstance(t, str) else None
+            if n and n not in out:
+                out.append(n)
+        if out:
+            tags[pid] = out
+    places: dict[str, dict] = {}
+    raw_places = data.get("locations") if isinstance(data.get("locations"), dict) else {}
+    for pid, raw in list(raw_places.items())[:MAX_ORDER]:
+        pl = clean_place(raw) if isinstance(pid, str) and 0 < len(pid) <= MAX_ID else None
+        if pl:
+            places[pid] = pl
+    return tags, places
+
+
+def apply_meta(entries: list[dict], tags: dict[str, list[str]], places: dict[str, dict]) -> None:
+    for e in entries:
+        if tags.get(e["id"]):
+            e["tags"] = tags[e["id"]]
+        if places.get(e["id"]):
+            e["place"] = places[e["id"]]
+
+
 def load_titles(path: Path = LEGACY_TITLES) -> dict[str, str]:
     """Titles from the older {id: title} file (kept for compatibility)."""
     return _clean_titles(_read_json(path))
@@ -686,6 +786,7 @@ def build(photos: list[Photo], config: dict) -> None:
         entries.append(e)
 
     apply_titles(entries, titles)
+    apply_meta(entries, *load_meta())
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
     cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,
                **data_settings(config))

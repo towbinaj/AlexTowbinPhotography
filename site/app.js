@@ -11,7 +11,8 @@
     return d && !isNaN(d) ? d.toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "";
   };
 
-  let photos = [];
+  let photos = [];      // what the gallery shows (all, or search results)
+  let allPhotos = [];
   let view = "stream";
 
   // ---------------- images ----------------
@@ -89,14 +90,14 @@
   // ---------------- hero slideshow ----------------
   function hero() {
     const media = $("hero-media");
-    $("hero-count").textContent = `${pad2(photos.length)} photographs`;
+    $("hero-count").textContent = `${pad2(allPhotos.length)} photographs`;
     // Newest few first, then a random sample of the rest.
-    const rest = photos.slice(3).sort(() => Math.random() - 0.5);
-    const picks = photos.slice(0, 3).concat(rest).slice(0, 6);
+    const rest = allPhotos.slice(3).sort(() => Math.random() - 0.5);
+    const picks = allPhotos.slice(0, 3).concat(rest).slice(0, 6);
     const slides = picks.map((p, i) => {
       const s = document.createElement("div"); s.className = "slide";
       s.appendChild(makeImg(p, "(max-width: 860px) 100vw, 45vw", i === 0));
-      s.addEventListener("click", () => openPhoto(photos.indexOf(p), s.firstChild));
+      s.addEventListener("click", () => { if (!photos.includes(p)) search.clear(); openPhoto(photos.indexOf(p), s.firstChild); });
       s.style.cursor = "zoom-in";
       media.insertBefore(s, $("hero-index"));
       return s;
@@ -245,12 +246,30 @@
     const p = photos[current];
     $("lb-count").textContent = `${pad2(current + 1)} / ${pad2(photos.length)}`;
     $("lb-caption").textContent = [p.caption, monthYear(p.taken)].filter(Boolean).join(" — ");
+    fillInfo(p);
     if (editor.on) editor.show(p);
     history.replaceState(null, "", `#photo-${p.id}`);
     for (const d of [1, -1]) { // warm the neighbours
       const n = photos[(current + d + photos.length) % photos.length];
       new Image().src = bestSrc(n, lbTargetWidth(n));
     }
+  }
+
+  // Place and tags under the photo; tapping one searches the gallery for it.
+  function fillInfo(p) {
+    const info = $("lb-info");
+    info.textContent = "";
+    const add = (label, cls, q) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = cls; b.textContent = label;
+      b.setAttribute("aria-label", `Show photos: ${q}`);
+      b.addEventListener("click", () => { closePhoto(); search.set(q); });
+      info.appendChild(b);
+    };
+    const label = window.PhotoMeta.placeLabel(p.place);
+    if (label) add(label, "lb-place", label);
+    for (const t of p.tags || []) add("#" + t, "lb-tag", t);
+    info.hidden = !info.childElementCount;
   }
 
   function openPhoto(i, fromImg) {
@@ -510,11 +529,13 @@
       },
     };
     function turnOn() {
+      search.clear(); $("search-wrap").classList.add("off");
       api_.on = true; store.set(ON, "1");
       form.hidden = false; $("edit-pill").hidden = false;
       if (!lb.hidden && photos[current]) api_.show(photos[current]);
     }
     function turnOff() {
+      $("search-wrap").classList.remove("off");
       api_.on = false; store.del(ON);
       form.hidden = true; $("edit-pill").hidden = true;
     }
@@ -550,6 +571,22 @@
       if (!("album_caption" in p)) p.album_caption = p.caption || "";
       p.caption = t || album || "";
     }
+    // Tags (only names in the tag library) and city/region/country places.
+    const M = window.PhotoMeta, lib = new Map();
+    for (const t of Array.isArray(data.tags) ? data.tags.slice(0, 300) : []) {
+      const n = typeof t === "string" ? M.cleanTag(t) : "";
+      if (n && !lib.has(n.toLowerCase())) lib.set(n.toLowerCase(), n);
+    }
+    const ptags = isObj(data.photo_tags) ? data.photo_tags : {}, locs = isObj(data.locations) ? data.locations : {};
+    const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+    for (const p of list) {
+      const names = own(ptags, p.id) && Array.isArray(ptags[p.id]) ? ptags[p.id].slice(0, 30) : [];
+      const tags = [];
+      for (const t of names) { const n = typeof t === "string" ? lib.get(M.cleanTag(t).toLowerCase()) : undefined; if (n && !tags.includes(n)) tags.push(n); }
+      if (tags.length) p.tags = tags; else delete p.tags;
+      const pl = own(locs, p.id) ? M.cleanPlace(locs[p.id]) : null;
+      if (pl) p.place = pl; else delete p.place;
+    }
     if (!Array.isArray(data.order)) return list;
     const known = new Set(list.map((p) => p.id)), rank = new Map();
     for (const id of data.order.slice(0, 5000)) if (typeof id === "string" && known.has(id) && !rank.has(id)) rank.set(id, rank.size);
@@ -558,6 +595,59 @@
     return list.filter((p) => !rank.has(p.id))
       .concat(list.filter((p) => rank.has(p.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id)));
   }
+
+  // ---------------- search ----------------
+  // Filters the gallery by title, place (city, state/region, country) and tag.
+  // Every word must match somewhere; accents and case don't matter.
+  const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const search = (() => {
+    const input = $("search"), count = $("search-count"), clearBtn = $("search-clear");
+    let q = "", timer;
+    const hay = new Map();
+    function haystack(p) {
+      if (!hay.has(p)) {
+        const pl = p.place || {};
+        hay.set(p, fold([p.caption, monthYear(p.taken), window.PhotoMeta.placeLabel(p.place), pl.city, pl.region, pl.country,
+          ...(p.tags || [])].filter(Boolean).join(" | ")));
+      }
+      return hay.get(p);
+    }
+    function suggestions() {
+      const set = new Set();
+      for (const p of allPhotos) {
+        for (const t of p.tags || []) set.add(t);
+        if (p.place) {
+          set.add(window.PhotoMeta.placeLabel(p.place));
+          if (p.place.region) set.add(p.place.region);
+          set.add(p.place.country);
+        }
+      }
+      const dl = $("search-list"); dl.textContent = "";
+      for (const v of [...set].sort((a, b) => a.localeCompare(b))) { const o = document.createElement("option"); o.value = v; dl.appendChild(o); }
+    }
+    function apply() {
+      const words = fold(q).split(/\s+/).filter(Boolean);
+      photos = words.length ? allPhotos.filter((p) => { const h = haystack(p); return words.every((w) => h.includes(w)); }) : allPhotos;
+      tiles.length = 0;
+      buildTiles();
+      layout();
+      $("empty").hidden = photos.length > 0 || !allPhotos.length;
+      $("empty").textContent = words.length ? "No photographs match that search." : "New photographs coming soon.";
+      count.textContent = words.length ? `${photos.length} of ${allPhotos.length}` : "";
+      clearBtn.hidden = !q;
+    }
+    input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { q = input.value.trim(); apply(); }, 120); });
+    input.addEventListener("search", () => { q = input.value.trim(); apply(); });
+    input.addEventListener("keydown", (e) => { if (e.key === "Escape") { api.clear(); input.blur(); } });
+    clearBtn.addEventListener("click", () => { api.clear(); input.focus(); });
+    const api = {
+      init() { hay.clear(); suggestions(); $("search-wrap").hidden = !allPhotos.length; },
+      set(v) { input.value = v; q = v; apply(); $("work").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" }); },
+      clear() { if (!q && !input.value) return; input.value = ""; q = ""; apply(); },
+      active: () => !!q,
+    };
+    return api;
+  })();
 
   // ---------------- boot ----------------
   let lastW = 0, rt;
@@ -573,13 +663,14 @@
     cfgReady.then((cfg) => loadLive(cfg.data_url)),
   ]).then(([cfg, list, live]) => {
     applyConfig(cfg);
-    photos = Array.isArray(list) ? applyLive(list, live) : [];
+    allPhotos = photos = Array.isArray(list) ? applyLive(list, live) : [];
     cursor();
     if (!photos.length) { $("empty").hidden = false; $("hero-media").hidden = true; return; }
     hero();
     buildTiles();
     lastW = masonry.clientWidth;
     layout();
+    search.init();
     const m = location.hash.match(/^#photo-(.+)$/);
     if (m) openPhoto(photos.findIndex((p) => p.id === m[1]), null);
     editor.init(cfg);

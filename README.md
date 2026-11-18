@@ -123,10 +123,23 @@ background) and opens full screen.
   and whether the photo kept its **location** (yes/no only; coordinates are
   never published). Swipe or use the arrows for the next photo. **Save**
   commits to the data repository.
+- **Tags:** add tags to a photo from your **tag library** (type to pick an
+  existing one; a new name asks before it's added, so the library stays
+  tidy). The **Tags** button (top) manages the library: add, rename (applies
+  to every photo), rename onto an existing tag to **merge**, delete.
+- **Location:** *Choose* opens a search of the built-in places list. Pick a
+  **city**, a **state/region**, or just a **country**: nothing more precise
+  is ever stored or shown. Places you've used are listed first. The list is
+  [GeoNames](https://www.geonames.org/) (CC BY 4.0) cities of 15,000+ people,
+  in English ("Florence", not "Firenze"); for a smaller town choose its
+  state/region. *Photo GPS* separately says whether the image file itself
+  kept its location (yes/no only).
+- **Search** (top of the grid) by title, place, tag or collection; filters
+  include *Untitled* and *No location*.
 - **Key** (top right): see the expiry date, replace or forget the key.
 
-Collections and highlights are saved now but don't change the public site yet;
-that comes next. New album photos show up in the app after the nightly build.
+Tags and locations show on the site right away (see below). Collections and
+highlights are saved but don't change the public site yet; that comes next. New album photos show up in the app after the nightly build.
 
 ## The site
 - **Opening screen:** your name in large serif type beside a slideshow of
@@ -134,6 +147,13 @@ that comes next. New album photos show up in the app after the nightly build.
 - **Stream view:** staggered columns that drift at slightly different speeds
   as you scroll, with photos revealed as they come into view.
 - **Index view:** a dense grid of everything.
+- **Search:** above the gallery; finds photos by place (city, state/region,
+  country), tag or title. Accents and capitals don't matter, and every word
+  must match ("italy street").
+- **Places and tags:** shown under each photo in the full-screen viewer
+  ("Florence, Italy  #Street"); tap one to see all photos with it. Places
+  are city/state/country level only. Search engines also get them
+  (`contentLocation`, `keywords` in the JSON-LD).
 - **Full-screen viewer:** the photo grows smoothly from its spot in the
   gallery (View Transitions). Use arrow keys or swipe to move between photos,
   swipe down to close. Each photo has its own shareable link (`#photo-…`).
@@ -170,6 +190,12 @@ No website can make images impossible to copy: screenshots and browser
 developer tools still work. These measures stop casual saving and make your
 ownership clear wherever the files end up, which is what matters if you ever
 need to file a takedown.
+
+## Places list
+`site/edit/places.json` (the editor's built-in places list) is generated from
+[GeoNames](https://www.geonames.org/) (CC BY 4.0) by `scripts/make_places.py`
+and committed; it holds names and ids only, no coordinates. Refresh it rarely
+with `python scripts/make_places.py` (needs access to download.geonames.org).
 
 ## Local preview
 ```

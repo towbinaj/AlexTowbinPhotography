@@ -112,4 +112,32 @@ input:disabled { opacity: .4; }
 .actions { display: flex; justify-content: flex-end; gap: 10px; }
 .actions.wrap { flex-wrap: wrap; }
 
+/* ---------- search, tags, places ---------- */
+.searchbar { padding: 12px var(--pad) 0; }
+input[type="search"] { width: 100%; min-height: 44px; padding: 10px 14px; font: 400 16px var(--sans); color: var(--fg);
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 999px; -webkit-appearance: none; appearance: none; }
+.brand.small { font-size: 26px; }
+.pad { padding-left: var(--pad); padding-right: var(--pad); }
+.hint.pad, .status.pad { margin: 10px 0 0; color: var(--muted); }
+.credit { margin-top: 18px !important; padding-bottom: 40px; }
+.inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.inline input { flex: 1; min-width: 0; }
+form.inline { margin-top: 14px; flex-wrap: nowrap; }
+.btn.small { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.tagbox { display: flex; flex-wrap: wrap; gap: 8px; }
+.tagbox:empty::before { content: "No tags yet"; color: var(--muted); font-size: 14px; }
+.tagchip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 6px 6px 12px; border-radius: 999px; background: var(--bg-3); border: 1px solid var(--line); font-size: 14px; }
+.tagchip button { width: 24px; height: 24px; border-radius: 50%; color: var(--muted); font-size: 16px; line-height: 1; }
+.tagchip button:hover { color: var(--fg); background: var(--bg-2); }
+.place { flex: 1; min-width: 0; font-size: 16px; }
+.place.none { color: var(--muted); }
+.results { list-style: none; margin: 8px 0 0; padding: 0 var(--pad); }
+.results li { border-bottom: 1px solid var(--line); }
+.results li > button { width: 100%; text-align: left; padding: 12px 0; display: grid; gap: 2px; }
+.results .sub { color: var(--muted); font-size: 11px; }
+.results .head { padding: 16px 0 6px; color: var(--accent); border: 0; }
+.tagrow { display: flex; align-items: center; gap: 8px; padding: 10px 0; }
+.tagrow .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tagrow .n { color: var(--muted); }
+
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

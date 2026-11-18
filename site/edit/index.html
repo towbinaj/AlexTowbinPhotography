@@ -49,8 +49,10 @@
     <header class="top">
       <h1 class="brand">Editor</h1>
       <span class="mono count" id="list-count"></span>
+      <button type="button" class="icon-btn mono" id="open-tags">Tags</button>
       <button type="button" class="icon-btn mono" id="open-settings" aria-label="Settings">Key</button>
     </header>
+    <div class="searchbar"><input id="list-search" type="search" placeholder="Search titles, places, tags" aria-label="Search photos" autocomplete="off" spellcheck="false" enterkeyhint="search"></div>
     <p class="banner mono" id="banner" hidden></p>
     <nav class="chips mono" id="chips" aria-label="Filter"></nav>
     <div class="grid" id="grid"></div>
@@ -79,6 +81,23 @@
       </div>
       <label class="field" id="f-newcoll-wrap" hidden><span class="mono">New collection name</span>
         <input id="f-newcoll" type="text" maxlength="60" placeholder="e.g. Chicago at Night"></label>
+      <div class="field">
+        <span class="mono" id="f-tags-label">Tags</span>
+        <div class="tagbox" id="f-tags" aria-labelledby="f-tags-label"></div>
+        <div class="inline">
+          <input id="f-tag-in" type="text" list="tag-list" maxlength="40" placeholder="Add a tag" enterkeyhint="done" autocomplete="off" aria-label="Add a tag">
+          <button type="button" class="btn ghost small" id="f-tag-add">Add</button>
+        </div>
+        <datalist id="tag-list"></datalist>
+      </div>
+      <div class="field">
+        <span class="mono">Location</span>
+        <div class="inline">
+          <span class="place" id="f-place"></span>
+          <button type="button" class="btn ghost small" id="f-place-pick">Choose</button>
+          <button type="button" class="btn ghost small" id="f-place-clear">Remove</button>
+        </div>
+      </div>
       <div class="row">
         <label class="toggle grow"><input id="f-high" type="checkbox"> <span>Highlight on main page</span></label>
         <label class="field narrow"><span class="mono">Main page No.</span>
@@ -87,13 +106,40 @@
       <dl class="facts mono">
         <div><dt>Taken</dt><dd id="f-taken"></dd></div>
         <div><dt>Added</dt><dd id="f-added"></dd></div>
-        <div><dt>Location</dt><dd id="f-loc"></dd></div>
+        <div><dt>Photo GPS</dt><dd id="f-loc"></dd></div>
       </dl>
       <div class="savebar">
         <span class="status mono" id="f-status" role="status" aria-live="polite"></span>
         <button type="submit" class="btn" id="f-save" disabled>Save</button>
       </div>
     </form>
+  </section>
+
+  <!-- Place picker -->
+  <section class="screen" id="picker" hidden aria-labelledby="picker-h">
+    <header class="top">
+      <button type="button" class="icon-btn mono" id="picker-cancel">Cancel</button>
+      <h1 class="brand small" id="picker-h">Location</h1>
+    </header>
+    <div class="searchbar"><input id="picker-q" type="search" placeholder="City, state or country" aria-label="Search places" autocomplete="off" spellcheck="false" enterkeyhint="search"></div>
+    <p class="mono hint pad" id="picker-hint">Pick a city, a state/region, or just a country. Only that is shown on the site, never an exact spot.</p>
+    <ul class="results" id="picker-results"></ul>
+    <p class="mono hint pad credit">Places from <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a> (CC BY 4.0): cities of 15,000+ people. For a smaller town, choose its state/region.</p>
+  </section>
+
+  <!-- Tag library -->
+  <section class="screen" id="tagscreen" hidden aria-labelledby="tags-h">
+    <header class="top">
+      <button type="button" class="icon-btn mono" id="tags-back">‹ All</button>
+      <h1 class="brand small" id="tags-h">Tags</h1>
+    </header>
+    <form class="inline pad" id="tag-new-form" autocomplete="off">
+      <input id="tag-new" type="text" maxlength="40" placeholder="New tag" enterkeyhint="done" aria-label="New tag">
+      <button type="submit" class="btn small">Add</button>
+    </form>
+    <p class="mono hint pad">Rename a tag to an existing name to merge them. Changes apply to every photo.</p>
+    <p class="status mono pad" id="tags-status" role="status" aria-live="polite"></p>
+    <ul class="results" id="tag-rows"></ul>
   </section>
 
   <!-- Settings -->
@@ -117,6 +163,7 @@
   <p class="boot mono" id="boot">Loading…</p>
 
   <script src="../titlecase.js"></script>
+  <script src="../meta.js"></script>
   <script src="model.js"></script>
   <script src="edit.js"></script>
 </body>

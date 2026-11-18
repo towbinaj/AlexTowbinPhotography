@@ -40,18 +40,24 @@
     return { doc: M.normalize(raw, clean), sha: j.sha };
   }
 
-  async function save(change) {
+  // Re-reads the latest file, applies `edit` to it and commits. `edit(doc)`
+  // returns { next, message }. Retries once if someone saved in between.
+  async function commit(edit) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const cur = await readDoc();
-      const mainIds = M.orderPhotos(all, cur.doc.order).map((p) => p.id);
-      const next = M.applyChange(cur.doc, { ...change, mainIds }, clean);
-      const body = { message: M.describe(cur.doc, next, change.id), content: b64enc(M.serialize(next)), branch: "main", ...(cur.sha ? { sha: cur.sha } : {}) };
+      const { next, message } = edit(cur.doc);
+      const body = { message, content: b64enc(M.serialize(next)), branch: "main", ...(cur.sha ? { sha: cur.sha } : {}) };
       const w = await fetch(api("/contents/curation.json"), { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (w.ok) { const j = await w.json().catch(() => ({})); doc = next; sha = j.content && j.content.sha; return; }
       if ((w.status === 409 || w.status === 422) && attempt === 0) continue; // changed underneath us: re-read once
       throw new GhError(why(w.status), w.status);
     }
   }
+  const save = (change) => commit((d) => {
+    const mainIds = M.orderPhotos(all, d.order).map((p) => p.id);
+    const next = M.applyChange(d, { ...change, mainIds }, clean);
+    return { next, message: M.describe(d, next, change.id) };
+  });
 
   // ---------------- helpers ----------------
   const fmtDate = (iso, opts) => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toLocaleDateString("en-US", opts) : "—"; };
@@ -63,7 +69,9 @@
   };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const ordered = () => M.orderPhotos(all, doc.order);
-  function show(id) { for (const s of ["setup", "list", "detail", "settings", "boot"]) $(s).hidden = s !== id; }
+  function show(id) { for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen"]) $(s).hidden = s !== id; }
+  const Meta = window.PhotoMeta;
+  const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
   // ---------------- key expiry ----------------
   function expiryInfo() {
@@ -87,13 +95,27 @@
   function filters() {
     const untitled = all.filter((p) => !doc.titles[p.id]).length;
     const loose = all.filter((p) => !M.collectionOf(doc, p.id)).length;
-    const out = [["all", `All ${all.length}`], ["untitled", `Untitled ${untitled}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
+    const noPlace = all.filter((p) => !doc.locations[p.id]).length;
+    const out = [["all", `All ${all.length}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
     doc.collections.forEach((c, i) => out.push(["c" + i, `${c.name} ${c.photos.filter((id) => all.some((p) => p.id === id)).length}`]));
     return out;
   }
+  let query = "";
+  function matches(p) {
+    const words = fold(query).split(/\s+/).filter(Boolean);
+    if (!words.length) return true;
+    const pl = doc.locations[p.id] || {};
+    const h = fold([doc.titles[p.id], monthYear(p.taken), Meta.placeLabel(doc.locations[p.id]), pl.region, pl.country,
+      ...(doc.photo_tags[p.id] || []), (M.collectionOf(doc, p.id) || {}).name].filter(Boolean).join(" | "));
+    return words.every((w) => h.includes(w));
+  }
   function photosFor(f) {
+    return photosForFilter(f).filter(matches);
+  }
+  function photosForFilter(f) {
     const list = ordered();
     if (f === "untitled") return list.filter((p) => !doc.titles[p.id]);
+    if (f === "noplace") return list.filter((p) => !doc.locations[p.id]);
     if (f === "high") return list.filter((p) => doc.highlights.includes(p.id));
     if (f === "none") return list.filter((p) => !M.collectionOf(doc, p.id));
     if (f[0] === "c") {
@@ -127,20 +149,25 @@
       const c = M.collectionOf(doc, p.id);
       const star = doc.highlights.includes(p.id);
       const meta = el("span", "meta mono" + (star ? " high" : ""), (star ? "★ " : "") + (c ? `${c.name} · ${c.pos}` : star ? "" : "—"));
-      a.append(frame, cap, meta);
+      const pl = doc.locations[p.id], tg = doc.photo_tags[p.id] || [];
+      const meta2 = el("span", "meta mono", [pl ? Meta.placeLabel(pl) : "", tg.length ? `${tg.length} tag${tg.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ") || "No location");
+      a.append(frame, cap, meta, meta2);
       a.setAttribute("aria-label", (title || "Untitled photo") + (c ? `, ${c.name} number ${c.pos}` : "") + (star ? ", highlighted" : ""));
       grid.appendChild(a);
     });
     $("list-empty").hidden = shown.length > 0;
+    $("list-empty").textContent = query ? "No photos match that search." : "Nothing here.";
     banner();
   }
 
   // ---------------- detail ----------------
   const NEW = " new"; // never a real name: names are trimmed
   let base = null; // field values when the photo was opened, to detect changes
+  let pendingTags = [], pendingPlace = null;
   function values() {
     const coll = $("f-coll").value === NEW ? M.cleanName($("f-newcoll").value, clean) : $("f-coll").value;
-    return { title: clean($("f-title").value), collection: coll, cpos: $("f-cpos").value, high: $("f-high").checked, mpos: $("f-mpos").value };
+    return { title: clean($("f-title").value), collection: coll, cpos: $("f-cpos").value, high: $("f-high").checked, mpos: $("f-mpos").value,
+      tags: pendingTags.join("\n"), place: Meta.placeKey(pendingPlace) };
   }
   function dirty() { const v = values(); return !!base && Object.keys(v).some((k) => String(v[k]) !== String(base[k])); }
   function refreshSave() { $("f-save").disabled = !dirty(); }
@@ -161,7 +188,7 @@
   }
 
   function openDetail(id) {
-    if (!shown.some((p) => p.id === id)) { filter = "all"; shown = photosFor("all"); }
+    if (!shown.some((p) => p.id === id)) { filter = "all"; query = ""; $("list-search").value = ""; shown = photosFor("all"); }
     current = shown.findIndex((p) => p.id === id);
     if (current < 0) { location.hash = ""; return; }
     const p = shown[current];
@@ -179,6 +206,10 @@
     $("f-newcoll").value = "";
     fillCollPos();
     $("f-high").checked = doc.highlights.includes(p.id);
+    pendingTags = (doc.photo_tags[p.id] || []).slice();
+    pendingPlace = doc.locations[p.id] || null;
+    $("f-tag-in").value = "";
+    renderTags(); renderPlace();
     const list = ordered();
     $("f-mpos").value = list.findIndex((x) => x.id === p.id) + 1;
     $("f-mpos").max = list.length;
@@ -186,7 +217,7 @@
     $("f-taken").textContent = longDate(p.taken);
     $("f-added").textContent = longDate(p.added);
     const loc = $("f-loc");
-    loc.textContent = p.located ? "✓ Kept" : "✗ None";
+    loc.textContent = p.located ? "✓ In the file" : "✗ Not in the file";
     loc.className = p.located ? "ok" : "no";
     status("");
     base = values();
@@ -218,6 +249,8 @@
       if (v.collection) change.collectionPos = Number(v.cpos) || null;
     }
     if (v.high !== base.high) change.highlight = v.high;
+    if (v.tags !== base.tags) change.tags = pendingTags.slice();
+    if (v.place !== base.place) change.place = pendingPlace;
     if (String(v.mpos) !== String(base.mpos)) {
       const n = Math.round(Number(v.mpos));
       if (!Number.isFinite(n) || n < 1 || n > all.length) { status(`Main page No. must be 1–${all.length}.`, true); return; }
@@ -256,10 +289,189 @@
   document.addEventListener("contextmenu", (e) => { if (e.target.tagName === "IMG") e.preventDefault(); });
   document.addEventListener("dragstart", (e) => { if (e.target.tagName === "IMG") e.preventDefault(); });
 
+  // ---------------- tags on a photo ----------------
+  function renderTags() {
+    const box = $("f-tags"); box.textContent = "";
+    for (const t of pendingTags) {
+      const chip = el("span", "tagchip", t);
+      const x = el("button", "", "×"); x.type = "button"; x.setAttribute("aria-label", `Remove tag ${t}`);
+      x.addEventListener("click", () => { pendingTags = pendingTags.filter((n) => n !== t); renderTags(); refreshSave(); });
+      chip.appendChild(x); box.appendChild(chip);
+    }
+    const dl = $("tag-list"); dl.textContent = "";
+    for (const t of doc.tags) if (!pendingTags.includes(t)) dl.appendChild(new Option(t, t));
+  }
+  function addTagFromInput() {
+    const n = Meta.cleanTag($("f-tag-in").value);
+    if (!n) return;
+    const lib = M.findTag(doc, n);
+    if (!lib && !confirm(`“${n}” isn't in your tag library yet. Add it as a new tag?`)) return;
+    const name = lib || n;
+    if (!pendingTags.includes(name)) pendingTags.push(name);
+    $("f-tag-in").value = "";
+    renderTags(); refreshSave();
+  }
+  $("f-tag-add").addEventListener("click", addTagFromInput);
+  $("f-tag-in").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTagFromInput(); } });
+  // Picking a suggestion from the list adds it right away.
+  $("f-tag-in").addEventListener("input", (e) => { if (e.inputType === "insertReplacementText" || (!e.inputType && M.findTag(doc, $("f-tag-in").value))) addTagFromInput(); });
+
+  // ---------------- location on a photo ----------------
+  function renderPlace() {
+    const pl = $("f-place");
+    pl.textContent = pendingPlace ? Meta.placeLabel(pendingPlace) : "Not set";
+    pl.classList.toggle("none", !pendingPlace);
+    $("f-place-clear").hidden = !pendingPlace;
+    $("f-place-pick").textContent = pendingPlace ? "Change" : "Choose";
+  }
+  $("f-place-clear").addEventListener("click", () => { pendingPlace = null; renderPlace(); refreshSave(); });
+  $("f-place-pick").addEventListener("click", () => picker.open());
+
+  // Built-in places list (site/edit/places.json, from GeoNames), loaded on first use.
+  const picker = (() => {
+    let data = null, loading = null, idx = null;
+    const load = () => loading || (loading = fetch("places.json").then((r) => { if (!r.ok) throw new Error(); return r.json(); }).then((d) => {
+      data = d;
+      const C = d.countries, R = d.regions;
+      idx = {
+        countries: C.map(([cc, name]) => ({ place: { level: "country", country: name, cc }, name: fold(name), extra: fold(cc) })),
+        regions: R.map(([code, name, ci]) => ({ place: { level: "region", code, region: name, country: C[ci][1], cc: C[ci][0] }, name: fold(name), extra: fold(C[ci][1]) })),
+        cities: d.cities.map(([gid, name, ri, ci, ascii]) => ({ gid, name: fold(name), ascii: ascii ? fold(ascii) : "", raw: name, ri, ci, extra: fold((ri >= 0 ? R[ri][1] : "") + " " + C[ci][1] + " " + C[ci][0]) })),
+      };
+    }));
+    const cityPlace = (c) => {
+      const C = data.countries, R = data.regions;
+      const pl = { level: "city", gid: c.gid, city: c.raw, country: C[c.ci][1], cc: C[c.ci][0] };
+      if (c.ri >= 0) pl.region = R[c.ri][1];
+      return Meta.cleanPlace(pl);
+    };
+    // The first word must start the place's name (or a word in it); any other
+    // words can match its state/region or country. Exact names rank first.
+    function score(name, alt, first) {
+      if (name === first || alt === first) return 0;
+      if (name.startsWith(first) || alt.startsWith(first)) return 1;
+      if ((" " + name).includes(" " + first) || (" " + alt).includes(" " + first)) return 2;
+      return -1;
+    }
+    function find(q) {
+      const parts = fold(q).replace(/,/g, " ").split(/\s+/).filter(Boolean);
+      if (!parts.length || !idx) return [];
+      // Try the longest leading run of words as the name ("new york", "san jose costa rica").
+      const out = [];
+      const seen = new Set();
+      for (let k = parts.length; k >= 1; k--) {
+        const first = parts.slice(0, k).join(" "), rest = parts.slice(k);
+        const ok = (e) => rest.every((w) => e.extra.includes(w));
+        const pools = [["country", idx.countries], ["region", idx.regions], ["city", idx.cities]];
+        for (const [lvl, pool] of pools) {
+          for (const e of pool) {
+            const s = score(e.name, e.ascii || "", first);
+            if (s < 0 || !ok(e)) continue;
+            const pl = lvl === "city" ? null : e.place;
+            const key = lvl === "city" ? "c:" + e.gid : Meta.placeKey(pl);  // no duplicates
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({ s, lvl, e });
+            if (out.length > 400) break;
+          }
+        }
+        if (out.length) break;
+      }
+      const rank = { country: 0, region: 1, city: 2 };
+      out.sort((a, b) => a.s - b.s || (a.s === 0 ? rank[a.lvl] - rank[b.lvl] : 0)); // stable: cities stay by population
+      return out.slice(0, 40).map((r) => (r.lvl === "city" ? cityPlace(r.e) : r.e.place)).filter(Boolean);
+    }
+    function item(pl, onPick) {
+      const li = el("li"), b = el("button");
+      b.type = "button";
+      b.append(el("span", "", Meta.placeLabel(pl)),
+        el("span", "sub mono", pl.level === "city" ? ["City", pl.region, pl.country].filter(Boolean).join(" · ") : pl.level === "region" ? `State / region · ${pl.country}` : "Country"));
+      b.addEventListener("click", () => onPick(pl));
+      li.appendChild(b);
+      return li;
+    }
+    function render() {
+      const ul = $("picker-results"), q = $("picker-q").value.trim();
+      ul.textContent = "";
+      const pick = (pl) => { pendingPlace = pl; renderPlace(); refreshSave(); close(); };
+      if (!q) {
+        const used = M.placesInUse(doc);
+        if (used.length) { ul.appendChild(el("li", "head mono", "Your places")); for (const pl of used) ul.appendChild(item(pl, pick)); }
+        return;
+      }
+      if (!idx) { ul.appendChild(el("li", "head mono", "Loading places…")); return; }
+      const res = find(q);
+      if (!res.length) { ul.appendChild(el("li", "head mono", "No match. Try the state/region or country.")); return; }
+      for (const pl of res) ul.appendChild(item(pl, pick));
+    }
+    let timer;
+    $("picker-q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(render, 150); });
+    $("picker-cancel").addEventListener("click", () => close());
+    function close() { show("detail"); $("f-place-pick").focus(); }
+    return {
+      open() {
+        $("picker-q").value = "";
+        show("picker"); render(); $("picker-q").focus();
+        load().then(render).catch(() => { $("picker-results").textContent = ""; $("picker-results").appendChild(el("li", "head mono", "Couldn't load the places list. Check your connection.")); });
+      },
+      find, load, // for tests
+    };
+  })();
+  window.__picker = picker;
+
+  // ---------------- tag library ----------------
+  function tagStatus(msg, err) { const s = $("tags-status"); s.textContent = msg; s.classList.toggle("err", !!err); }
+  async function libraryEdit(fn, message) {
+    tagStatus("Saving…");
+    try {
+      await commit((d) => ({ next: fn(d), message }));
+      tagStatus("Saved");
+    } catch (err) { tagStatus(err.message || "Couldn't save. Try again.", true); }
+    renderTagScreen();
+  }
+  function renderTagScreen() {
+    const ul = $("tag-rows"); ul.textContent = "";
+    const counts = M.tagCounts(doc, all.map((p) => p.id));
+    if (!doc.tags.length) ul.appendChild(el("li", "head mono", "No tags yet. Add one above, or from a photo."));
+    for (const t of [...doc.tags].sort((a, b) => a.localeCompare(b))) {
+      const li = el("li", "tagrow");
+      const rename = el("button", "btn ghost small", "Rename"), del = el("button", "btn ghost small", "Delete");
+      rename.type = del.type = "button";
+      rename.addEventListener("click", () => {
+        const to = prompt(`Rename “${t}” to:`, t);
+        if (to == null) return;
+        const n = Meta.cleanTag(to);
+        if (!n || n === t) return;
+        const target = M.findTag(doc, n);
+        if (target && target !== t && !confirm(`“${target}” already exists. Merge “${t}” into it?`)) return;
+        libraryEdit((d) => M.renameTag(d, t, n), target && target !== t ? `Tags: merge "${t}" into "${target}"` : `Tags: rename "${t}" to "${n}"`);
+      });
+      del.addEventListener("click", () => {
+        if (!confirm(`Delete “${t}”? It's removed from ${counts[t] || 0} photo${counts[t] === 1 ? "" : "s"}.`)) return;
+        libraryEdit((d) => M.deleteTag(d, t), `Tags: delete "${t}"`);
+      });
+      li.append(el("span", "name", t), el("span", "n mono", String(counts[t] || 0)), rename, del);
+      ul.appendChild(li);
+    }
+  }
+  $("tag-new-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const n = Meta.cleanTag($("tag-new").value);
+    if (!n) return;
+    if (M.findTag(doc, n)) { tagStatus(`“${M.findTag(doc, n)}” already exists.`, true); return; }
+    $("tag-new").value = "";
+    libraryEdit((d) => M.addTag(d, n), `Tags: add "${n}"`);
+  });
+  $("open-tags").addEventListener("click", () => { location.hash = "#tags"; });
+  $("tags-back").addEventListener("click", () => { location.hash = ""; });
+  let qt;
+  $("list-search").addEventListener("input", () => { clearTimeout(qt); qt = setTimeout(() => { query = $("list-search").value.trim(); renderList(); }, 120); });
+
   // ---------------- routing ----------------
   function route() {
     const m = location.hash.match(/^#p\/(.+)$/);
     if (m) openDetail(decodeURIComponent(m[1]));
+    else if (location.hash === "#tags") { tagStatus(""); renderTagScreen(); show("tagscreen"); }
     else { renderList(); show("list"); }
   }
   addEventListener("hashchange", () => { if (getKey() && all.length) route(); });

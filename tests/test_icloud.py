@@ -355,7 +355,7 @@ def test_model_normalize_rejects_junk():
     assert d == {"titles": {"a": "Shine a Light"}, "order": ["a", "b"],
                  "collections": [{"name": "Chicago at Night", "photos": ["a", "b"]},
                                  {"name": "Other", "photos": ["d"]}],
-                 "highlights": ["a"]}
+                 "highlights": ["a"], "tags": [], "photo_tags": {}, "locations": {}}
 
 
 def test_model_apply_change_moves_between_collections_and_reorders():
@@ -390,3 +390,92 @@ def test_model_order_matches_build_rule():
     P = lambda i: build.Photo(id=i, source=None)
     want = [p.id for p in build.apply_order([P(i) for i in ["n2", "n1", "c", "a", "b"]], ["a", "b", "c", "gone"])]
     assert placed == want and auto == ["n2", "n1", "c", "a", "b"]
+
+
+# ---- tags and places (site/meta.js <-> build.py) ----
+
+FLORENCE = {"level": "city", "gid": 3176959, "city": "Florence", "region": "Tuscany", "country": "Italy", "cc": "IT"}
+PLACES_IN = [
+    FLORENCE,
+    {"level": "city", "gid": 4164138, "city": "Miami", "region": "Florida", "country": "United States", "cc": "US"},
+    {"level": "city", "gid": 1.0, "city": "No Region", "country": "Somewhere", "cc": "SW"},
+    {"level": "region", "code": "IT.16", "region": "Tuscany", "country": "Italy", "cc": "IT", "lat": 43.7},
+    {"level": "country", "country": "Italy", "cc": "IT", "city": "ignored"},
+    {"level": "city", "gid": 5, "city": "  Spaced\u202e  Out ", "country": "X" * 100, "cc": "XX"},
+    {"level": "street", "country": "Italy", "cc": "IT"},
+    {"level": "city", "gid": True, "city": "Bool", "country": "Italy", "cc": "IT"},
+    {"level": "city", "gid": -1, "city": "Neg", "country": "Italy", "cc": "IT"},
+    {"level": "region", "code": "IT.16\"><", "region": "Tuscany", "country": "Italy", "cc": "IT"},
+    {"level": "country", "country": "Italy", "cc": "it"},
+    "Florence", None, [FLORENCE],
+]
+TAGS_IN = ["street photography", "  NYC  at night ", "x" * 60, "\u200b", "<b>bold</b>"]
+
+
+def _node_meta():
+    import shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node not installed")
+    root = Path(__file__).resolve().parent.parent
+    script = ("require(process.argv[1]);const M=require(process.argv[2]);const [places,tags]=JSON.parse(process.argv[3]);"
+              "const cp=places.map(M.cleanPlace);"
+              "process.stdout.write(JSON.stringify([cp,cp.map(M.placeLabel),tags.map(M.cleanTag)]));")
+    out = subprocess.run([node, "-e", script, str(root / "site" / "titlecase.js"), str(root / "site" / "meta.js"),
+                          json.dumps([PLACES_IN, TAGS_IN])], capture_output=True, text=True, check=True).stdout
+    return json.loads(out)
+
+
+def test_places_and_tags_match_js():
+    js_places, js_labels, js_tags = _node_meta()
+    py_places = [build.clean_place(p) for p in PLACES_IN]
+    assert js_places == py_places
+    assert js_labels == [build.place_label(p) for p in py_places]
+    assert js_tags == [build.clean_tag(t) for t in TAGS_IN]
+    assert js_labels[:5] == ["Florence, Italy", "Miami, Florida, United States", "No Region, Somewhere",
+                             "Tuscany, Italy", "Italy"]
+    assert py_places[3] == {"level": "region", "code": "IT.16", "region": "Tuscany", "country": "Italy", "cc": "IT"}
+    assert all(p is None for p in py_places[6:])
+
+
+def test_load_meta_keeps_only_library_tags_and_valid_places(tmp_path):
+    cur = tmp_path / "curation.json"
+    cur.write_text(json.dumps({
+        "tags": ["street", "Night", "NIGHT", 7],
+        "photo_tags": {"a": ["STREET", "bogus", "night", "street"], "b": "street", "c": ["nope"]},
+        "locations": {"a": FLORENCE, "b": {"level": "city", "city": "x"}},
+    }))
+    tags, places = build.load_meta(cur)
+    assert tags == {"a": ["Street", "Night"]}
+    assert places == {"a": FLORENCE}
+    assert build.load_meta(tmp_path / "missing.json") == ({}, {})
+
+
+def test_json_ld_has_keywords_and_city_level_place():
+    entries = [{"id": "a", "w": 10, "h": 10, "caption": "", "src": [{"url": "img/a.webp", "w": 10, "h": 10}],
+                "tags": ["Street", "Night"], "place": FLORENCE}]
+    r = build.rights({"name": "Test Person"})
+    data = json.loads(build.json_ld(entries, {"name": "Test Person"}, r, "https://example.org/site"))
+    img = data["image"][0]
+    assert img["keywords"] == "Street, Night"
+    assert img["contentLocation"] == {"@type": "Place", "name": "Florence, Italy"}
+
+
+def test_model_tag_library_rename_merges_and_delete_clears():
+    script = """
+    let d = M.normalize({tags:['Street','Night','Rain'], photo_tags:{a:['Street','Night'], b:['Night','Rain']}}, cleanTitle);
+    const r1 = M.renameTag(d, 'night', 'Evening');           // plain rename
+    const r2 = M.renameTag(d, 'Night', 'street');            // onto existing: merge
+    const r3 = M.deleteTag(d, 'RAIN');
+    const r4 = M.applyChange(d, {id:'c', tags:['brand new', 'street'], place: {level:'country', country:'Italy', cc:'IT'}}, cleanTitle);
+    process.stdout.write(JSON.stringify([r1.tags, r1.photo_tags, r2.tags, r2.photo_tags, r3.tags, r3.photo_tags,
+      r4.tags, r4.photo_tags.c, r4.locations.c, M.placesInUse(r4).length, d.tags]));
+    """
+    r1t, r1p, r2t, r2p, r3t, r3p, r4t, r4c, r4l, n, orig = _node_model(script)
+    assert r1t == ["Street", "Evening", "Rain"] and r1p == {"a": ["Street", "Evening"], "b": ["Evening", "Rain"]}
+    assert r2t == ["Street", "Rain"] and r2p == {"a": ["Street"], "b": ["Street", "Rain"]}
+    assert r3t == ["Street", "Night"] and r3p == {"a": ["Street", "Night"], "b": ["Night"]}
+    assert r4t == ["Street", "Night", "Rain", "Brand New"] and r4c == ["Brand New", "Street"]
+    assert r4l == {"level": "country", "country": "Italy", "cc": "IT"} and n == 1
+    assert orig == ["Street", "Night", "Rain"]

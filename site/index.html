@@ -109,9 +109,11 @@
         <button type="button" id="lb-close" aria-label="Close">Close</button>
       </span>
     </div>
-    <form class="lb-edit mono" id="lb-edit" hidden autocomplete="off">
+    <form class="lb-edit mono" id="lb-edit" hidden autocomplete="off" novalidate>
       <label for="lb-title">Title</label>
       <input id="lb-title" type="text" maxlength="200" placeholder="No title — the date is shown" enterkeyhint="done">
+      <label for="lb-pos" class="lb-pos-label">No.</label>
+      <span class="lb-pos"><input id="lb-pos" type="number" inputmode="numeric" min="1" step="1" enterkeyhint="done" aria-describedby="lb-pos-of"><span id="lb-pos-of"></span></span>
       <button type="submit" id="lb-title-save">Save</button>
       <span class="lb-edit-status" id="lb-edit-status" role="status" aria-live="polite"></span>
     </form>

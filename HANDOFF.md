@@ -86,7 +86,8 @@ supported as a fallback, which `download_album()` picks from the token shape.
 | Owner-only photo filter | Link sharing can't be view-only, so joiners could add photos |
 | Sort `newest-added`, tie-break by date taken | All 32 were added at once |
 | Copyright everywhere + save deterrents | Owner wants to protect the work; it deters, can't prevent |
-| Titles typed on the site (`#edit` → `titles.json`) | Apple doesn't expose captions/comments via the public link (tested: change feed is a frozen snapshot); owner keeps using Snapseed |
+| Film grain behind content | It sat over the photos (z-index 50); the art is never overlaid |
+| Titles + order set on the site (`#edit` → `curation.json`) | Apple doesn't expose captions/comments via the public link (tested: change feed is a frozen snapshot); owner keeps using Snapseed |
 
 ## Open items / ideas
 1. **Tagline** is now the owner's Instagram bio. `about` is still empty, so

@@ -332,8 +332,9 @@
 
   // ---------------- title editor (owner only) ----------------
   // Visiting the site with #edit asks for a GitHub key (kept in this browser
-  // only). While editing is on, the lightbox shows a title field; saving
-  // writes titles.json in the repo, and the next build publishes it.
+  // only). While editing is on, the lightbox shows title and position fields;
+  // saving writes curation.json ({titles, order}) in the repo, and the next
+  // build publishes it.
   const editor = (() => {
     const KEY = "at-title-key", ON = "at-title-edit";
     const store = {
@@ -343,7 +344,7 @@
     };
     let repo = "", memKey = null;
     const key = () => store.get(KEY) || memKey;
-    const api = () => `https://api.github.com/repos/${repo}/contents/titles.json`;
+    const api = (file = "curation.json") => `https://api.github.com/repos/${repo}/contents/${file}`;
     const headers = () => ({ Authorization: `Bearer ${key()}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" });
     const b64enc = (str) => { const bytes = new TextEncoder().encode(str); let bin = ""; for (const b of bytes) bin += String.fromCharCode(b); return btoa(bin); };
     const b64dec = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
@@ -353,26 +354,44 @@
       status === 409 || status === 422 ? "Someone saved at the same moment. Try again." :
       `Couldn't save (GitHub error ${status}). Try again.`;
 
-    async function readTitles() {
-      const r = await fetch(api() + "?ref=main", { headers: headers(), cache: "no-store" });
-      if (r.status === 404) return { data: {}, sha: undefined };
+    async function getJSON(file) {
+      const r = await fetch(api(file) + "?ref=main", { headers: headers(), cache: "no-store" });
+      if (r.status === 404) return { exists: false };
       if (!r.ok) throw new Error(why(r.status));
       const j = await r.json();
-      let data = {};
-      try { data = JSON.parse(b64dec(j.content || "")) || {}; } catch { data = {}; }
-      return { data: typeof data === "object" && !Array.isArray(data) ? data : {}, sha: j.sha };
+      let data = null;
+      try { data = JSON.parse(b64dec(j.content || "")); } catch { data = null; }
+      return { exists: true, data, sha: j.sha };
+    }
+    const isObj = (o) => o && typeof o === "object" && !Array.isArray(o);
+
+    async function readCuration() {
+      const cur = await getJSON("curation.json");
+      if (cur.exists) {
+        const d = isObj(cur.data) ? cur.data : {};
+        return { titles: isObj(d.titles) ? d.titles : {}, order: Array.isArray(d.order) ? d.order : [], sha: cur.sha };
+      }
+      // First save: carry over titles from the older titles.json format.
+      const old = await getJSON("titles.json");
+      return { titles: old.exists && isObj(old.data) ? old.data : {}, order: [], sha: undefined };
     }
 
-    async function save(id, title) {
+    // change = { id, title, order? }  (order: full list of photo ids, or undefined to leave as is)
+    async function save(change) {
       for (let attempt = 0; attempt < 2; attempt++) {
-        const { data, sha } = await readTitles();
-        if (title) data[id] = title; else delete data[id];
-        const sorted = Object.fromEntries(Object.keys(data).sort().map((k) => [k, data[k]]));
+        const cur = await readCuration();
+        const titles = { ...cur.titles };
+        if (change.title) titles[change.id] = change.title; else delete titles[change.id];
+        const sorted = Object.fromEntries(Object.keys(titles).sort().map((k) => [k, titles[k]]));
+        const doc = { titles: sorted, order: change.order || cur.order };
+        const parts = [];
+        if ((cur.titles[change.id] || "") !== (change.title || "")) parts.push(change.title ? `title "${change.title}"` : "title removed");
+        if (change.order) parts.push(`moved to #${change.order.indexOf(change.id) + 1}`);
         const body = {
-          message: title ? `Title for photo ${id}: ${title}` : `Remove title for photo ${id}`,
-          content: b64enc(JSON.stringify(sorted, null, 2) + "\n"),
+          message: `Photo ${change.id}: ${parts.join(", ") || "no change"}`,
+          content: b64enc(JSON.stringify(doc, null, 2) + "\n"),
           branch: "main",
-          ...(sha ? { sha } : {}),
+          ...(cur.sha ? { sha: cur.sha } : {}),
         };
         const w = await fetch(api(), { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
         if (w.ok) return;
@@ -381,7 +400,7 @@
       }
     }
 
-    const form = $("lb-edit"), input = $("lb-title"), status = $("lb-edit-status"), btn = $("lb-title-save");
+    const form = $("lb-edit"), input = $("lb-title"), posIn = $("lb-pos"), status = $("lb-edit-status"), btn = $("lb-title-save");
     const setStatus = (msg, err) => { status.textContent = msg; status.classList.toggle("err", !!err); };
 
     function applyLocally(p, title) {
@@ -396,17 +415,42 @@
       }
     }
 
+    function moveLocally(p, to) {
+      const from = photos.indexOf(p);
+      photos.splice(from, 1);
+      photos.splice(to, 0, p);
+      tiles.length = 0;
+      buildTiles();
+      layout();
+      current = to;
+      fillBar();
+    }
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const p = photos[current];
       if (!p) return;
       const title = input.value.replace(/\s+/g, " ").trim().slice(0, 200);
+      const from = photos.indexOf(p);
+      const want = Math.round(Number(posIn.value));
+      if (!Number.isFinite(want) || want < 1 || want > photos.length) {
+        setStatus(`Position must be 1–${photos.length}.`, true); return;
+      }
+      const to = want - 1;
+      let order;
+      if (to !== from) {
+        const ids = photos.map((x) => x.id).filter((id) => id !== p.id);
+        ids.splice(to, 0, p.id);
+        order = ids;
+      }
+      if (title === (p.caption || "") && order === undefined) { setStatus("Nothing to save."); return; }
       btn.disabled = true; setStatus("Saving…");
       try {
-        await save(p.id, title);
+        await save({ id: p.id, title, order });
         applyLocally(p, title);
+        if (order) moveLocally(p, to);
         input.value = title;
-        setStatus(title ? "Saved · live in ~2 min" : "Removed · live in ~2 min");
+        setStatus("Saved · live in ~2 min");
       } catch (err) {
         setStatus(err.message || "Couldn't save. Try again.", true);
       } finally {
@@ -445,7 +489,13 @@
 
     const api_ = {
       on: false,
-      show(p) { input.value = p.caption || ""; setStatus(""); },
+      show(p) {
+        input.value = p.caption || "";
+        posIn.value = photos.indexOf(p) + 1;
+        posIn.max = photos.length;
+        $("lb-pos-of").textContent = `of ${photos.length}`;
+        setStatus("");
+      },
       init(cfg) {
         repo = (cfg && cfg.repo) || "";
         if (location.hash === "#edit") {

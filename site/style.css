@@ -233,6 +233,12 @@ body.has-cursor .cursor.big span { opacity: 1; }
   .lb-edit { flex-wrap: wrap; }
   .lb-edit label { display: none; }
   .lb-edit input { flex-basis: 100%; }
-  .lb-edit-status { flex: 1; }
+  .lb-edit-status { flex: 1 0 100%; white-space: normal; }
 }
 .lightbox:not([hidden]) ~ .edit-pill { display: none; }
+.lb-pos { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.lb-edit .lb-pos input { flex: none; width: 3.2em; text-align: center; -moz-appearance: textfield; }
+.lb-pos input::-webkit-outer-spin-button, .lb-pos input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+@media (max-width: 560px) {
+  .lb-edit .lb-pos-label { display: inline; }
+}

@@ -35,10 +35,10 @@ owner's iCloud shared album, processes them, and builds a static site into
 - **Low maintenance.** The owner's only workflow is adding and removing photos
   in the shared album. Don't add steps that need manual upkeep (e.g. expiring
   API tokens).
-- **Photo titles are typed on the site** (owner chose this; `#edit` mode, a
+- **Photo titles and order are set on the site** (owner chose this; `#edit` mode, a
   fine-grained GitHub key with Contents read/write on this repo only, stored in
-  the owner's browser). Saves write `titles.json` via the GitHub API, which
-  triggers a deploy. Titles are optional: untitled photos show the date. Apple
+  the owner's browser). Saves write `curation.json` (`{titles, order}`) via
+  the GitHub API, which triggers a deploy. Unplaced (new) photos sort first. Titles are optional: untitled photos show the date. Apple
   captions/comments are not reachable through the public album link (tested).
   Never put a key in the repo or the build.
 - **Instagram (@towbinaj)** is linked, not embedded. A live feed needs a
@@ -48,7 +48,7 @@ owner's iCloud shared album, processes them, and builds a static site into
 ## Layout
 ```
 config.json                 site settings (name, tagline, about, sort, copyright…)
-titles.json                 photo id → title, written by the site's title editor
+curation.json               {titles: {id: title}, order: [ids]}, written by the site's #edit mode
 scripts/build.py            iCloud fetch → image processing → _site/
 site/index.html|style.css|app.js|robots.txt   static front end (no framework, no build step)
 tests/test_icloud.py        offline tests (fake iCloud responses; no network)

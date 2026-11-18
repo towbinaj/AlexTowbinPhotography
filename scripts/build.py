@@ -506,26 +506,64 @@ def json_ld(entries: list[dict], config: dict, r: dict, site_url: str) -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
 
-TITLES = ROOT / "titles.json"
+CURATION = ROOT / "curation.json"     # written by the site's editor (#edit)
+LEGACY_TITLES = ROOT / "titles.json"  # older editor format: {id: title}
 MAX_TITLE = 200
 
 
-def load_titles(path: Path = TITLES) -> dict[str, str]:
-    """Photo id -> title, from titles.json (written by the site's title editor).
-
-    A bad or missing file just means no titles; it never fails the build.
-    """
-    try:
-        data = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
-    if not isinstance(data, dict):
-        return {}
+def _clean_titles(data) -> dict[str, str]:
     out = {}
-    for k, v in data.items():
-        if isinstance(k, str) and isinstance(v, str) and v.strip():
-            out[k] = " ".join(v.split())[:MAX_TITLE]
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(k, str) and isinstance(v, str) and v.strip():
+                out[k] = " ".join(v.split())[:MAX_TITLE]
     return out
+
+
+def _read_json(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def load_curation(path: Path = CURATION, legacy: Path = LEGACY_TITLES) -> tuple[dict[str, str], list[str]]:
+    """(photo id -> title, photo ids in the owner's chosen order).
+
+    A bad or missing file just means no titles / automatic order; it never
+    fails the build.
+    """
+    data = _read_json(path)
+    order: list[str] = []
+    if not isinstance(data, dict):
+        # Nothing saved in the current format yet: fall back to the older file.
+        return _clean_titles(_read_json(legacy)), order
+    titles = _clean_titles(data.get("titles"))
+    seen = set()
+    for pid in data.get("order") or []:
+        if isinstance(pid, str) and pid not in seen:
+            seen.add(pid)
+            order.append(pid)
+    return titles, order
+
+
+def load_titles(path: Path = LEGACY_TITLES) -> dict[str, str]:
+    """Titles from the older {id: title} file (kept for compatibility)."""
+    return _clean_titles(_read_json(path))
+
+
+def apply_order(photos: list, order: list[str]) -> list:
+    """Put photos in the owner's chosen order.
+
+    Photos not in the list yet (newly added to the album) come first, in the
+    automatic order, so new work shows up at the top until it's placed.
+    """
+    if not order:
+        return photos
+    rank = {pid: i for i, pid in enumerate(order)}
+    new = [p for p in photos if p.id not in rank]
+    placed = sorted((p for p in photos if p.id in rank), key=lambda p: rank[p.id])
+    return new + placed
 
 
 def apply_titles(entries: list[dict], titles: dict[str, str]) -> None:
@@ -542,7 +580,8 @@ def build(photos: list[Photo], config: dict) -> None:
     shutil.copytree(SITE_SRC, OUT)
     (OUT / "img").mkdir()
 
-    photos = sort_photos(photos, config.get("sort", "newest-added"))
+    titles, order = load_curation()
+    photos = apply_order(sort_photos(photos, config.get("sort", "newest-added")), order)
     if config.get("max_photos"):
         photos = photos[: int(config["max_photos"])]
 
@@ -562,7 +601,7 @@ def build(photos: list[Photo], config: dict) -> None:
             og_written = True
         entries.append(e)
 
-    apply_titles(entries, load_titles())
+    apply_titles(entries, titles)
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
     # `repo` tells the page's title editor where titles.json lives.
     cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,

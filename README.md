@@ -52,9 +52,10 @@ Edit `config.json`:
 | `copyright_start_year` | first year of the notice, e.g. `2026` → "© 2026–2027 …" in later years |
 | `trim_white_borders` | `false` (default) keeps photos exactly as framed; `true` crops uniform white borders |
 
-### Photo titles
-Titles are typed on the site itself and appear under the photo and in the
-full-screen view. Photos without a title show the month they were taken.
+### Photo titles and order
+Titles and the order of the photos are set on the site itself. Titles appear
+under the photo and in the full-screen view; photos without a title show the
+month they were taken.
 
 **One-time setup on each device you edit from:**
 1. On GitHub, create a key: *Settings → Developer settings → Personal access
@@ -66,14 +67,20 @@ full-screen view. Photos without a title show the month they were taken.
 2. Open the site with `#edit` at the end of the address
    (e.g. `…/AlexTowbinPhotography/#edit`) and paste the key.
 
-**Editing:** open any photo, type its title in the field under it, and tap
-**Save**. It's live in about 2 minutes. Clear the field and save to remove a
-title. Tap **Done** to hide the editor; visiting with `#edit` turns it back on.
+**Editing:** open any photo. Type its title in the field under it, and/or
+change its **No.** (its position, 1 = first) and tap **Save**. It's live in
+about 2 minutes. Clear the title and save to remove it. Put your strongest
+photo first and your second-strongest last. Tap **Done** to hide the editor;
+visiting with `#edit` turns it back on.
+
+Photos you add to the album later appear **first** until you give them a
+position, so new work is easy to spot.
 The key is stored only in that browser (*Forget key* removes it), and visitors
 never see the editor.
 
-Titles are saved to `titles.json` in the repository, keyed by photo. Editing
-a photo again in Snapseed creates a new version of it, which starts untitled.
+Everything is saved to `curation.json` in the repository, keyed by photo.
+Editing a photo again in Snapseed creates a new version of it, which starts
+untitled and unplaced.
 
 Captions set in the Photos app can't be used: Apple doesn't pass them, or
 comments on shared-album photos, through the album's public link.

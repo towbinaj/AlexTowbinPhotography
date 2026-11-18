@@ -208,3 +208,25 @@ def test_titles_override_album_captions():
     entries = [{"id": "a", "caption": "from album"}, {"id": "b", "caption": ""}, {"id": "c", "caption": "keep"}]
     build.apply_titles(entries, {"a": "Edited", "b": "New"})
     assert [e["caption"] for e in entries] == ["Edited", "New", "keep"]
+
+
+# ---- curation.json: titles + chosen order ----
+
+def test_load_curation_falls_back_to_legacy_titles_and_dedupes_order(tmp_path):
+    cur, legacy = tmp_path / "curation.json", tmp_path / "titles.json"
+    assert build.load_curation(cur, legacy) == ({}, [])
+    legacy.write_text('{"a": "Old", "b": "Old b"}')
+    cur.write_text('{"titles": {"b": "New b", "c": 3}, "order": ["x", "y", "x", 7, "z"]}')
+    titles, order = build.load_curation(cur, legacy)
+    assert titles == {"b": "New b"}          # once curation.json exists, the old file is ignored
+    assert order == ["x", "y", "z"]
+    cur.write_text("garbage")
+    assert build.load_curation(cur, legacy) == ({"a": "Old", "b": "Old b"}, [])
+
+
+def test_apply_order_places_known_photos_and_puts_new_ones_first():
+    P = lambda i: build.Photo(id=i, source=None)
+    auto = [P("n2"), P("n1"), P("c"), P("a"), P("b")]       # automatic (newest-added) order
+    out = build.apply_order(auto, ["a", "b", "c", "gone"])  # "gone" was removed from the album
+    assert [p.id for p in out] == ["n2", "n1", "a", "b", "c"]
+    assert build.apply_order(auto, []) == auto

@@ -298,8 +298,25 @@
       x.addEventListener("click", () => { pendingTags = pendingTags.filter((n) => n !== t); renderTags(); refreshSave(); });
       chip.appendChild(x); box.appendChild(chip);
     }
-    const dl = $("tag-list"); dl.textContent = "";
-    for (const t of doc.tags) if (!pendingTags.includes(t)) dl.appendChild(new Option(t, t));
+    renderSuggestions();
+  }
+  // Library tags not on this photo, as tap-to-add chips (always shown; iOS
+  // Safari's <datalist> often shows nothing). Typing narrows the list; most
+  // used tags first.
+  function renderSuggestions() {
+    const box = $("f-tag-suggest"); box.textContent = "";
+    const q = fold($("f-tag-in").value.trim());
+    const counts = M.tagCounts(doc, all.map((p) => p.id));
+    const list = doc.tags.filter((t) => !pendingTags.includes(t) && (!q || fold(t).includes(q)))
+      .sort((a, b) => (counts[b] || 0) - (counts[a] || 0) || a.localeCompare(b));
+    for (const t of list.slice(0, 40)) {
+      const b = el("button", "suggest", "+ " + t); b.type = "button";
+      b.setAttribute("aria-label", `Add tag ${t}`);
+      b.addEventListener("click", () => { if (!pendingTags.includes(t)) pendingTags.push(t); $("f-tag-in").value = ""; renderTags(); refreshSave(); });
+      box.appendChild(b);
+    }
+    if (!list.length && q && !M.findTag(doc, $("f-tag-in").value)) box.appendChild(el("span", "hint mono", "New tag: tap Add"));
+    box.hidden = !box.childElementCount;
   }
   function addTagFromInput() {
     const n = Meta.cleanTag($("f-tag-in").value);
@@ -313,8 +330,7 @@
   }
   $("f-tag-add").addEventListener("click", addTagFromInput);
   $("f-tag-in").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTagFromInput(); } });
-  // Picking a suggestion from the list adds it right away.
-  $("f-tag-in").addEventListener("input", (e) => { if (e.inputType === "insertReplacementText" || (!e.inputType && M.findTag(doc, $("f-tag-in").value))) addTagFromInput(); });
+  $("f-tag-in").addEventListener("input", renderSuggestions);
 
   // ---------------- location on a photo ----------------
   function renderPlace() {

@@ -86,10 +86,10 @@
         <span class="mono" id="f-tags-label">Tags</span>
         <div class="tagbox" id="f-tags" aria-labelledby="f-tags-label"></div>
         <div class="inline">
-          <input id="f-tag-in" type="text" list="tag-list" maxlength="40" placeholder="Add a tag" enterkeyhint="done" autocomplete="off" aria-label="Add a tag">
+          <input id="f-tag-in" type="text" maxlength="40" placeholder="Add a tag" enterkeyhint="done" autocomplete="off" aria-label="Add a tag">
           <button type="button" class="btn ghost small" id="f-tag-add">Add</button>
         </div>
-        <datalist id="tag-list"></datalist>
+        <div class="tagsuggest" id="f-tag-suggest" aria-label="Your tags: tap to add"></div>
       </div>
       <div class="field">
         <span class="mono">Location</span>

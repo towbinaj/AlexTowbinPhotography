@@ -129,6 +129,10 @@ form.inline { margin-top: 14px; flex-wrap: nowrap; }
 .tagchip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 6px 6px 12px; border-radius: 999px; background: var(--bg-3); border: 1px solid var(--line); font-size: 14px; }
 .tagchip button { width: 24px; height: 24px; border-radius: 50%; color: var(--muted); font-size: 16px; line-height: 1; }
 .tagchip button:hover { color: var(--fg); background: var(--bg-2); }
+.tagsuggest { display: flex; flex-wrap: wrap; gap: 8px; }
+.suggest { padding: 7px 12px; border-radius: 999px; border: 1px dashed var(--line); color: var(--muted); font-size: 14px; }
+.suggest:hover, .suggest:focus-visible { color: var(--fg); border-color: var(--fg); }
+.tagsuggest .hint { color: var(--muted); align-self: center; text-transform: none; letter-spacing: .02em; }
 .place { flex: 1; min-width: 0; font-size: 16px; }
 .place.none { color: var(--muted); }
 .results { list-style: none; margin: 8px 0 0; padding: 0 var(--pad); }

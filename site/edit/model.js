@@ -210,6 +210,36 @@
     return out;
   }
 
+  // Several photos at once. op = { addTags?: [names], removeTags?: [names],
+  // collection?: name or "" (none), place?: place or null (remove) }.
+  // Collection: photos already in it keep their spot; the rest are added at
+  // the end in the order given.
+  function applyBulk(doc, ids, op, cleanTitle) {
+    let out = copy(doc);
+    const add = (op.addTags || []).map((t) => Meta.cleanTag(t)).filter(Boolean);
+    const remove = new Set((op.removeTags || []).map((t) => findTag(out, t)).filter(Boolean));
+    for (const id of ids) {
+      const change = { id };
+      if (add.length || remove.size) {
+        const cur = (out.photo_tags[id] || []).filter((t) => !remove.has(t));
+        change.tags = cur.concat(add);
+      }
+      if (has(op, "collection")) change.collection = op.collection || "";
+      if (has(op, "place")) change.place = op.place;
+      out = applyChange(out, change, cleanTitle);
+    }
+    return out;
+  }
+
+  function describeBulk(ids, op) {
+    const parts = [];
+    if ((op.addTags || []).length) parts.push(`tags +${op.addTags.join(", +")}`);
+    if ((op.removeTags || []).length) parts.push(`tags -${op.removeTags.join(", -")}`);
+    if (has(op, "collection")) parts.push(op.collection ? `collection "${op.collection}"` : "no collection");
+    if (has(op, "place")) parts.push(op.place ? `location ${Meta.placeLabel(op.place)}` : "location removed");
+    return `${ids.length} photo${ids.length === 1 ? "" : "s"}: ${parts.join("; ") || "no change"}`;
+  }
+
   // Short commit message describing what changed for one photo.
   function describe(before, after, id) {
     const parts = [];
@@ -238,7 +268,7 @@
   }
 
   const api = { normalize, orderPhotos, collectionOf, applyChange, describe, serialize, cleanName, MAX_NAME,
-    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag };
+    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk };
   root.EditModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

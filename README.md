@@ -133,6 +133,14 @@ background) and opens full screen.
   kept its location (yes/no only).
 - **Search** (top of the grid) by title, place, tag or collection; filters
   include *Untitled* and *No location*.
+- **Several photos at once:** tap **Select**, tap the photos (or *Select
+  all* for the current filter/search), then use the bar at the bottom:
+  - **Tags:** each tag shows ✓ (all selected have it), – (some) or empty;
+    tap to add it to all, tap again to remove it from all; *Apply* saves.
+  - **Collection:** pick one, create a new one, or *No collection*. Photos
+    already in it keep their place; the rest go at the end in main page order.
+  - **Location:** pick a place for all of them.
+  Each is one save.
 - **Face ID lock:** when you first connect, *Lock the editor with Face ID*
   is ticked: the app then asks for Face ID every time it opens and after 5
   minutes in the background. On iPhones with iOS 18 or later, Face ID also

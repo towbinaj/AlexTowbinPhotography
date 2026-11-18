@@ -500,3 +500,24 @@ def test_load_highlights_dedupes_and_keeps_known(tmp_path):
     assert build.load_highlights(cur, known={"a", "b"}) == ["a", "b"]
     cur.write_text('{"highlights": "a"}')
     assert build.load_highlights(cur) == []
+
+
+def test_model_bulk_tags_collection_and_place():
+    script = """
+    let d = M.normalize({tags:['Street','Night'], photo_tags:{a:['Street'], b:['Night']},
+      collections:[{name:'Old', photos:['a']}, {name:'Series', photos:['c','b']}]}, cleanTitle);
+    const flo = {level:'city', gid:3176959, city:'Florence', region:'Tuscany', country:'Italy', cc:'IT'};
+    const n = M.applyBulk(d, ['a','b','x'], {addTags:['night','brand new'], removeTags:['Street'], collection:'series', place: flo}, cleanTitle);
+    const r = M.applyBulk(n, ['a','x'], {collection:'', place:null}, cleanTitle);
+    process.stdout.write(JSON.stringify([n.tags, n.photo_tags, n.collections, Object.keys(n.locations),
+      r.collections, Object.keys(r.locations), M.describeBulk(['a','b','x'], {addTags:['Night'], collection:'Series', place: flo}), d.photo_tags]));
+    """
+    tags, ptags, colls, locs, colls2, locs2, msg, orig = _node_model(script)
+    assert tags == ["Street", "Night", "Brand New"]
+    assert ptags == {"a": ["Night", "Brand New"], "b": ["Night", "Brand New"], "x": ["Night", "Brand New"]}
+    # b already in Series keeps its place; a and x are appended in the order given; empty "Old" is dropped
+    assert colls == [{"name": "Series", "photos": ["c", "b", "a", "x"]}]
+    assert locs == ["a", "b", "x"]
+    assert colls2 == [{"name": "Series", "photos": ["c", "b"]}] and locs2 == ["b"]
+    assert msg == '3 photos: tags +Night; collection "Series"; location Florence, Italy'
+    assert orig == {"a": ["Street"], "b": ["Night"]}

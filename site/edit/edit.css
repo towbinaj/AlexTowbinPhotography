@@ -147,4 +147,23 @@ form.inline { margin-top: 14px; flex-wrap: nowrap; }
 .card.center { text-align: center; justify-items: center; }
 .linkish { color: var(--muted); text-decoration: underline; text-underline-offset: .2em; font: inherit; text-transform: none; letter-spacing: .02em; }
 
+/* ---------- select several ---------- */
+.tile.sel .frame { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tile.sel .cap::before { content: "✓ "; color: var(--accent); }
+.selecting .grid { padding-bottom: 110px; }
+.bulkbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  padding: 12px var(--pad) calc(12px + env(safe-area-inset-bottom)); background: rgba(11, 11, 10, .94);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
+}
+.bulkbar .btn { flex: 1; max-width: 160px; }
+.toast { margin: 0 var(--pad) 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--fg); text-transform: none; letter-spacing: .02em; }
+.toast.err { color: var(--bad); border-color: var(--bad); }
+.staterow > button { grid-template-columns: 28px 1fr auto; align-items: center; display: grid; gap: 10px; }
+.state { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line); display: grid; place-items: center; font-size: 14px; }
+.state.all { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.state.some { color: var(--accent); }
+.staterow .sub { text-align: right; }
+#bulktags .results { padding-bottom: 110px; }
+
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

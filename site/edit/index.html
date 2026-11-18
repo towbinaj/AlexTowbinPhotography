@@ -47,17 +47,62 @@
 
   <!-- Photo grid -->
   <section class="screen" id="list" hidden>
-    <header class="top">
+    <header class="top" id="list-top">
       <h1 class="brand">Editor</h1>
       <span class="mono count" id="list-count"></span>
+      <button type="button" class="icon-btn mono" id="sel-start">Select</button>
       <button type="button" class="icon-btn mono" id="open-tags">Tags</button>
       <button type="button" class="icon-btn mono" id="open-settings" aria-label="Settings">Key</button>
+    </header>
+    <header class="top" id="sel-top" hidden>
+      <button type="button" class="icon-btn mono" id="sel-cancel">Cancel</button>
+      <span class="mono count" id="sel-count" aria-live="polite"></span>
+      <button type="button" class="icon-btn mono" id="sel-all">Select all</button>
     </header>
     <div class="searchbar"><input id="list-search" type="search" placeholder="Search titles, places, tags" aria-label="Search photos" autocomplete="off" spellcheck="false" enterkeyhint="search"></div>
     <p class="banner mono" id="banner" hidden></p>
     <nav class="chips mono" id="chips" aria-label="Filter"></nav>
     <div class="grid" id="grid"></div>
     <p class="empty mono" id="list-empty" hidden>Nothing here.</p>
+    <p class="toast mono" id="list-status" role="status" aria-live="polite" hidden></p>
+    <div class="bulkbar" id="bulkbar" hidden>
+      <button type="button" class="btn ghost small" id="bulk-tags" disabled>Tags</button>
+      <button type="button" class="btn ghost small" id="bulk-coll" disabled>Collection</button>
+      <button type="button" class="btn ghost small" id="bulk-place" disabled>Location</button>
+    </div>
+  </section>
+
+  <!-- Bulk: tags for the selected photos -->
+  <section class="screen" id="bulktags" hidden aria-labelledby="bt-h">
+    <header class="top">
+      <button type="button" class="icon-btn mono" id="bt-cancel">Cancel</button>
+      <h1 class="brand small" id="bt-h">Tags</h1>
+    </header>
+    <p class="mono hint pad" id="bt-hint"></p>
+    <form class="inline pad" id="bt-new-form" autocomplete="off">
+      <input id="bt-new" type="text" maxlength="40" placeholder="New tag" enterkeyhint="done" aria-label="New tag">
+      <button type="submit" class="btn ghost small">Add</button>
+    </form>
+    <ul class="results" id="bt-rows"></ul>
+    <div class="savebar">
+      <span class="status mono" id="bt-status" role="status" aria-live="polite"></span>
+      <button type="button" class="btn" id="bt-apply" disabled>Apply</button>
+    </div>
+  </section>
+
+  <!-- Bulk: collection for the selected photos -->
+  <section class="screen" id="bulkcoll" hidden aria-labelledby="bc-h">
+    <header class="top">
+      <button type="button" class="icon-btn mono" id="bc-cancel">Cancel</button>
+      <h1 class="brand small" id="bc-h">Collection</h1>
+    </header>
+    <p class="mono hint pad" id="bc-hint"></p>
+    <form class="inline pad" id="bc-new-form" autocomplete="off">
+      <input id="bc-new" type="text" maxlength="60" placeholder="New collection name" enterkeyhint="done" aria-label="New collection name">
+      <button type="submit" class="btn small">Create</button>
+    </form>
+    <p class="status mono pad" id="bc-status" role="status" aria-live="polite"></p>
+    <ul class="results" id="bc-rows"></ul>
   </section>
 
   <!-- Photo detail -->

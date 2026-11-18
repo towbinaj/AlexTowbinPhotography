@@ -69,7 +69,7 @@
   };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const ordered = () => M.orderPhotos(all, doc.order);
-  function show(id) { for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen", "lock"]) $(s).hidden = s !== id; }
+  function show(id) { for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen", "lock", "bulktags", "bulkcoll"]) $(s).hidden = s !== id; }
   const Meta = window.PhotoMeta;
   const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -140,7 +140,16 @@
     $("list-count").textContent = `${all.length} photos`;
     const grid = $("grid"); grid.textContent = "";
     shown.forEach((p) => {
-      const a = el("a", "tile"); a.href = "#p/" + encodeURIComponent(p.id);
+      const a = el("a", "tile" + (selected.has(p.id) ? " sel" : "")); a.href = "#p/" + encodeURIComponent(p.id);
+      a.addEventListener("click", (e) => {
+        if (!selecting) return;
+        e.preventDefault();
+        if (selected.has(p.id)) selected.delete(p.id); else selected.add(p.id);
+        a.classList.toggle("sel", selected.has(p.id));
+        a.setAttribute("aria-pressed", String(selected.has(p.id)));
+        selUpdate();
+      });
+      if (selecting) a.setAttribute("aria-pressed", String(selected.has(p.id)));
       const img = new Image(); img.loading = "lazy"; img.decoding = "async"; img.draggable = false; img.alt = "";
       img.src = thumb(p, 180); img.width = p.w; img.height = p.h;
       const frame = el("span", "frame"); frame.appendChild(img);
@@ -155,6 +164,7 @@
       a.setAttribute("aria-label", (title || "Untitled photo") + (c ? `, ${c.name} number ${c.pos}` : "") + (star ? ", highlighted" : ""));
       grid.appendChild(a);
     });
+    if (selecting) selUpdate();
     $("list-empty").hidden = shown.length > 0;
     $("list-empty").textContent = query ? "No photos match that search." : "Nothing here.";
     banner();
@@ -341,7 +351,7 @@
     $("f-place-pick").textContent = pendingPlace ? "Change" : "Choose";
   }
   $("f-place-clear").addEventListener("click", () => { pendingPlace = null; renderPlace(); refreshSave(); });
-  $("f-place-pick").addEventListener("click", () => picker.open());
+  $("f-place-pick").addEventListener("click", () => picker.open((pl) => { pendingPlace = pl; renderPlace(); refreshSave(); }));
 
   // Built-in places list (site/edit/places.json, from GeoNames), loaded on first use.
   const picker = (() => {
@@ -409,7 +419,7 @@
     function render() {
       const ul = $("picker-results"), q = $("picker-q").value.trim();
       ul.textContent = "";
-      const pick = (pl) => { pendingPlace = pl; renderPlace(); refreshSave(); close(); };
+      const pick = (pl) => { const fn = onPick; close(); fn(pl); };
       if (!q) {
         const used = M.placesInUse(doc);
         if (used.length) { ul.appendChild(el("li", "head mono", "Your places")); for (const pl of used) ul.appendChild(item(pl, pick)); }
@@ -423,9 +433,13 @@
     let timer;
     $("picker-q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(render, 150); });
     $("picker-cancel").addEventListener("click", () => close());
-    function close() { show("detail"); $("f-place-pick").focus(); }
+    let onPick = null, back = "detail";
+    function close() { show(back); if (back === "detail") $("f-place-pick").focus(); }
     return {
-      open() {
+      // pick(place) is called with the chosen place; returns to `from`.
+      open(pickFn, from = "detail", title = "Location") {
+        onPick = pickFn; back = from;
+        $("picker-h").textContent = title;
         $("picker-q").value = "";
         show("picker"); render(); $("picker-q").focus();
         load().then(render).catch(() => { $("picker-results").textContent = ""; $("picker-results").appendChild(el("li", "head mono", "Couldn't load the places list. Check your connection.")); });
@@ -434,6 +448,136 @@
     };
   })();
   window.__picker = picker;
+
+  // ---------------- select several: bulk tags / collection / location ----------------
+  let selecting = false;
+  const selected = new Set();
+  function selUpdate() {
+    const n = selected.size;
+    $("sel-count").textContent = n ? `${n} selected` : "Tap photos";
+    for (const id of ["bulk-tags", "bulk-coll", "bulk-place"]) $(id).disabled = !n;
+    $("sel-all").textContent = shown.length && shown.every((p) => selected.has(p.id)) ? "Select none" : "Select all";
+  }
+  function setSelecting(on) {
+    selecting = on;
+    if (!on) selected.clear();
+    $("list").classList.toggle("selecting", on);
+    $("list-top").hidden = on; $("sel-top").hidden = !on; $("bulkbar").hidden = !on;
+    renderList();
+  }
+  function listStatus(msg, err) {
+    const t = $("list-status");
+    t.textContent = msg; t.classList.toggle("err", !!err); t.hidden = !msg;
+    clearTimeout(listStatus.t);
+    if (msg && !err) listStatus.t = setTimeout(() => { t.hidden = true; }, 6000);
+  }
+  // Selected ids in main page order (the order used when adding to a collection).
+  const selIds = () => ordered().map((p) => p.id).filter((id) => selected.has(id));
+  async function bulkSave(op, from) {
+    const ids = selIds();
+    try {
+      await commit((d) => ({ next: M.applyBulk(d, ids, op, clean), message: M.describeBulk(ids, op) }));
+      setSelecting(false); show("list");
+      listStatus(`Saved for ${ids.length} photo${ids.length === 1 ? "" : "s"} · on the site in ~5 min`);
+      return true;
+    } catch (err) {
+      if (from) show(from); else show("list");
+      listStatus(err.message || "Couldn't save. Try again.", true);
+      return false;
+    }
+  }
+  $("sel-start").addEventListener("click", () => { listStatus(""); setSelecting(true); });
+  $("sel-cancel").addEventListener("click", () => setSelecting(false));
+  $("sel-all").addEventListener("click", () => {
+    const allOn = shown.every((p) => selected.has(p.id));
+    for (const p of shown) { if (allOn) selected.delete(p.id); else selected.add(p.id); }
+    renderList();
+  });
+
+  // Tags: each library tag shows whether all, some or none of the selected
+  // photos have it; tapping sets it on all of them, or (if all have it) removes it.
+  let btWant = new Map(); // tag -> "add" | "remove"
+  function btState(t) {
+    const w = btWant.get(t);
+    if (w) return w === "add" ? "all" : "none";
+    const ids = selIds(), n = ids.filter((id) => (doc.photo_tags[id] || []).includes(t)).length;
+    return n === 0 ? "none" : n === ids.length ? "all" : "some";
+  }
+  function renderBulkTags() {
+    const ids = selIds(), ul = $("bt-rows"); ul.textContent = "";
+    $("bt-h").textContent = `Tags · ${ids.length} photo${ids.length === 1 ? "" : "s"}`;
+    $("bt-hint").textContent = "Tap a tag to add it to all selected photos; tap again to remove it from all.";
+    const names = doc.tags.concat([...btWant.keys()].filter((t) => !doc.tags.includes(t)));
+    if (!names.length) ul.appendChild(el("li", "head mono", "No tags yet. Add one above."));
+    for (const t of names.sort((a, b) => a.localeCompare(b))) {
+      const st = btState(t), li = el("li", "staterow"), b = el("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", st === "all" ? "true" : st === "some" ? "mixed" : "false");
+      const n = ids.filter((id) => (doc.photo_tags[id] || []).includes(t)).length;
+      b.append(el("span", "state " + st, st === "all" ? "✓" : st === "some" ? "–" : ""), el("span", "", t),
+        el("span", "sub mono", btWant.has(t) ? (btWant.get(t) === "add" ? "will add" : "will remove") : n ? `${n} of ${ids.length}` : ""));
+      b.addEventListener("click", () => {
+        const now = btState(t);
+        const orig = n === 0 ? "none" : n === ids.length ? "all" : "some";
+        const next = now === "all" ? "none" : "all";
+        if (next === orig && orig !== "some") btWant.delete(t); else btWant.set(t, next === "all" ? "add" : "remove");
+        renderBulkTags();
+      });
+      li.appendChild(b); ul.appendChild(li);
+    }
+    $("bt-apply").disabled = !btWant.size;
+    $("bt-status").textContent = btWant.size ? `${btWant.size} change${btWant.size === 1 ? "" : "s"}` : "";
+  }
+  $("bulk-tags").addEventListener("click", () => { btWant = new Map(); $("bt-new").value = ""; renderBulkTags(); show("bulktags"); });
+  $("bt-cancel").addEventListener("click", () => show("list"));
+  $("bt-new-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const n = Meta.cleanTag($("bt-new").value);
+    if (!n) return;
+    btWant.set(M.findTag(doc, n) || n, "add");
+    $("bt-new").value = "";
+    renderBulkTags();
+  });
+  $("bt-apply").addEventListener("click", async () => {
+    const addTags = [...btWant].filter(([, w]) => w === "add").map(([t]) => t);
+    const removeTags = [...btWant].filter(([, w]) => w === "remove").map(([t]) => t);
+    $("bt-apply").disabled = true; $("bt-status").textContent = "Saving…";
+    if (!await bulkSave({ addTags, removeTags }, "bulktags")) { $("bt-apply").disabled = false; $("bt-status").textContent = ""; }
+  });
+
+  // Collection: move all selected photos into one (or out of any).
+  function renderBulkColl() {
+    const ids = selIds(), ul = $("bc-rows"); ul.textContent = "";
+    $("bc-h").textContent = `Collection · ${ids.length} photo${ids.length === 1 ? "" : "s"}`;
+    $("bc-hint").textContent = "Photos already in the collection keep their place; the others are added at the end, in main page order. A photo can be in one collection.";
+    $("bc-status").textContent = "";
+    const row = (label, sub, name) => {
+      const li = el("li"), b = el("button"); b.type = "button";
+      b.append(el("span", "", label), el("span", "sub mono", sub));
+      b.addEventListener("click", () => { $("bc-status").textContent = "Saving…"; bulkSave({ collection: name }, "bulkcoll"); });
+      li.appendChild(b); ul.appendChild(li);
+    };
+    for (const c of doc.collections) {
+      const inIt = ids.filter((id) => c.photos.includes(id)).length;
+      row(c.name, `${c.photos.length} photo${c.photos.length === 1 ? "" : "s"}` + (inIt ? ` · ${inIt} selected already in it` : ""), c.name);
+    }
+    row("No collection", "Take the selected photos out of their collections", "");
+  }
+  $("bulk-coll").addEventListener("click", () => { $("bc-new").value = ""; renderBulkColl(); show("bulkcoll"); });
+  $("bc-cancel").addEventListener("click", () => show("list"));
+  $("bc-new-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const n = M.cleanName($("bc-new").value, clean);
+    if (!n) { $("bc-status").textContent = "Name the new collection."; return; }
+    $("bc-status").textContent = "Saving…";
+    bulkSave({ collection: n }, "bulkcoll");
+  });
+
+  // Location: the same place picker, applied to all selected photos.
+  $("bulk-place").addEventListener("click", () => {
+    const n = selected.size;
+    picker.open((pl) => bulkSave({ place: pl }, "list"), "list", `Location · ${n} photo${n === 1 ? "" : "s"}`);
+  });
 
   // ---------------- tag library ----------------
   function tagStatus(msg, err) { const s = $("tags-status"); s.textContent = msg; s.classList.toggle("err", !!err); }
@@ -489,6 +633,7 @@
     if (m) openDetail(decodeURIComponent(m[1]));
     else if (location.hash === "#tags") { tagStatus(""); renderTagScreen(); show("tagscreen"); }
     else { renderList(); show("list"); }
+    if (m && selecting) setSelecting(false);
   }
   addEventListener("hashchange", () => { if (!locked && getKey() && all.length) route(); });
 

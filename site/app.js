@@ -4,6 +4,7 @@
   const $ = (id) => document.getElementById(id);
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const isObj = (o) => !!o && typeof o === "object" && !Array.isArray(o);
   const pad2 = (n) => String(n).padStart(2, "0");
   const monthYear = (iso) => {
     const d = iso ? new Date(iso) : null;
@@ -333,15 +334,17 @@
   // ---------------- title editor (owner only) ----------------
   // Visiting the site with #edit asks for a GitHub key (kept in this browser
   // only). While editing is on, the lightbox shows title and position fields;
-  // saving writes curation.json ({titles, order}) in the repo, and the next
-  // build publishes it.
+  // saving writes curation.json ({titles, order}) in the photo data repo
+  // (config "data_repo"), which the page reads live. The key only needs
+  // access to that repo, never to the site's code.
   const editor = (() => {
-    const KEY = "at-title-key", ON = "at-title-edit";
+    const KEY = "at-data-key", ON = "at-title-edit";
     const store = {
       get(k) { try { return localStorage.getItem(k); } catch { return null; } },
       set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: lasts this visit */ } },
       del(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
     };
+    try { localStorage.removeItem("at-title-key"); } catch { /* old site-repo key: no longer used */ }
     let repo = "", memKey = null;
     const key = () => store.get(KEY) || memKey;
     const api = (file = "curation.json") => `https://api.github.com/repos/${repo}/contents/${file}`;
@@ -350,7 +353,7 @@
     const b64dec = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
     const why = (status) =>
       status === 401 ? "GitHub didn't accept the key (it may have expired). Visit the site with #edit to set a new one." :
-      status === 403 || status === 404 ? "This key can't save to the site's repository. It needs Contents: read and write." :
+      status === 403 || status === 404 ? "This key can't save to the photo data repository. It needs Contents: read and write on that repository." :
       status === 409 || status === 422 ? "Someone saved at the same moment. Try again." :
       `Couldn't save (GitHub error ${status}). Try again.`;
 
@@ -363,17 +366,10 @@
       try { data = JSON.parse(b64dec(j.content || "")); } catch { data = null; }
       return { exists: true, data, sha: j.sha };
     }
-    const isObj = (o) => o && typeof o === "object" && !Array.isArray(o);
-
     async function readCuration() {
       const cur = await getJSON("curation.json");
-      if (cur.exists) {
-        const d = isObj(cur.data) ? cur.data : {};
-        return { titles: isObj(d.titles) ? d.titles : {}, order: Array.isArray(d.order) ? d.order : [], sha: cur.sha };
-      }
-      // First save: carry over titles from the older titles.json format.
-      const old = await getJSON("titles.json");
-      return { titles: old.exists && isObj(old.data) ? old.data : {}, order: [], sha: undefined };
+      const d = cur.exists && isObj(cur.data) ? cur.data : {};
+      return { titles: isObj(d.titles) ? d.titles : {}, order: Array.isArray(d.order) ? d.order : [], sha: cur.sha };
     }
 
     // change = { id, title, order? }  (order: full list of photo ids, or undefined to leave as is)
@@ -430,7 +426,7 @@
       e.preventDefault();
       const p = photos[current];
       if (!p) return;
-      const title = window.titleCase(input.value.replace(/\s+/g, " ").trim().slice(0, 200));
+      const title = window.cleanTitle(input.value);
       const from = photos.indexOf(p);
       const want = Math.round(Number(posIn.value));
       if (!Number.isFinite(want) || want < 1 || want > photos.length) {
@@ -450,7 +446,7 @@
         applyLocally(p, title);
         if (order) moveLocally(p, to);
         input.value = title;
-        setStatus("Saved · live in ~2 min");
+        setStatus("Saved · live in ~5 min");
       } catch (err) {
         setStatus(err.message || "Couldn't save. Try again.", true);
       } finally {
@@ -474,7 +470,7 @@
       errEl.textContent = "Checking…";
       try {
         const r = await fetch(`https://api.github.com/repos/${repo}`, { headers: { ...headers(), Authorization: `Bearer ${k}` }, cache: "no-store" });
-        if (!r.ok) { errEl.textContent = r.status === 401 ? "GitHub didn't accept that key." : "That key can't see this site's repository."; return; }
+        if (!r.ok) { errEl.textContent = r.status === 401 ? "GitHub didn't accept that key." : "That key can't see the photo data repository."; return; }
         const j = await r.json();
         if (j.permissions && j.permissions.push === false) { errEl.textContent = "That key can read but not save. It needs Contents: read and write."; return; }
       } catch {
@@ -497,7 +493,7 @@
         setStatus("");
       },
       init(cfg) {
-        repo = (cfg && cfg.repo) || "";
+        repo = (cfg && cfg.data_repo) || "";
         if (location.hash === "#edit") {
           history.replaceState(null, "", location.pathname + location.search);
           if (!repo) { alert("Title editing works on the published site only."); return; }
@@ -516,9 +512,46 @@
       api_.on = false; store.del(ON);
       form.hidden = true; $("edit-pill").hidden = true;
     }
-    addEventListener("hashchange", () => { if (location.hash === "#edit") api_.init({ repo }); });
+    addEventListener("hashchange", () => { if (location.hash === "#edit") api_.init({ data_repo: repo }); });
     return api_;
   })();
+
+  // ---------------- live titles & order (data repo) ----------------
+  // photos.json has the titles/order baked in at the last build. The page also
+  // reads curation.json from the public data repo, so edits show up within
+  // minutes without a rebuild. That file is untrusted: only string titles for
+  // known photo ids (cleaned like the build does), known ids in the order,
+  // a size cap, and everything is rendered as text.
+  const MAX_DATA = 512 * 1024;
+  async function loadLive(url) {
+    if (!/^https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\/main\/curation\.json$/.test(url || "")) return null;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 2500); // slow network: keep the baked copy
+    try {
+      const r = await fetch(url, { cache: "no-cache", credentials: "omit", referrerPolicy: "no-referrer", signal: ctl.signal });
+      if (!r.ok) return null;
+      const text = await r.text();
+      return text.length > MAX_DATA ? null : JSON.parse(text);
+    } catch { return null; } finally { clearTimeout(timer); }
+  }
+  function applyLive(list, data) {
+    if (!isObj(data)) return list;
+    const titles = isObj(data.titles) ? data.titles : {};
+    for (const p of list) {
+      const raw = Object.prototype.hasOwnProperty.call(titles, p.id) ? titles[p.id] : "";
+      const t = typeof raw === "string" ? window.cleanTitle(raw) : "";
+      const album = "album_caption" in p ? p.album_caption : p.caption;
+      if (!("album_caption" in p)) p.album_caption = p.caption || "";
+      p.caption = t || album || "";
+    }
+    if (!Array.isArray(data.order)) return list;
+    const known = new Set(list.map((p) => p.id)), rank = new Map();
+    for (const id of data.order.slice(0, 5000)) if (typeof id === "string" && known.has(id) && !rank.has(id)) rank.set(id, rank.size);
+    if (!rank.size) return list;
+    // Same rule as the build: photos not placed yet come first.
+    return list.filter((p) => !rank.has(p.id))
+      .concat(list.filter((p) => rank.has(p.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id)));
+  }
 
   // ---------------- boot ----------------
   let lastW = 0, rt;
@@ -527,12 +560,14 @@
     rt = setTimeout(() => { if (masonry.clientWidth !== lastW) { lastW = masonry.clientWidth; layout(); } }, 150);
   });
 
+  const cfgReady = fetch("config.json").then((r) => r.json()).catch(() => ({}));
   Promise.all([
-    fetch("config.json").then((r) => r.json()).catch(() => ({})),
+    cfgReady,
     fetch("photos.json").then((r) => r.json()).catch(() => []),
-  ]).then(([cfg, list]) => {
+    cfgReady.then((cfg) => loadLive(cfg.data_url)),
+  ]).then(([cfg, list, live]) => {
     applyConfig(cfg);
-    photos = list;
+    photos = Array.isArray(list) ? applyLive(list, live) : [];
     cursor();
     if (!photos.length) { $("empty").hidden = false; $("hero-media").hidden = true; return; }
     hero();

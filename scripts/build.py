@@ -506,9 +506,16 @@ def json_ld(entries: list[dict], config: dict, r: dict, site_url: str) -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
 
-CURATION = ROOT / "curation.json"     # written by the site's editor (#edit)
+# Titles and order live in a separate data repo (config "data_repo"), written
+# by the site's editor. CI checks it out into data/; CURATION_FILE overrides.
+# The data is treated as untrusted: see load_curation().
+CURATION = Path(os.environ.get("CURATION_FILE") or ROOT / "data" / "curation.json")
 LEGACY_TITLES = ROOT / "titles.json"  # older editor format: {id: title}
 MAX_TITLE = 200
+MAX_ID = 64
+MAX_ORDER = 5000
+DATA_REPO_RE = re.compile(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]")
 
 
 
@@ -551,12 +558,21 @@ def title_case(text: str) -> str:
     return "".join(tokens)
 
 
+def clean_title(text: str) -> str:
+    """Untrusted title -> safe display text (kept identical to cleanTitle() in app.js):
+    control/invisible characters become spaces, whitespace collapses, at most
+    MAX_TITLE characters, then title case."""
+    return title_case(" ".join(_CONTROL.sub(" ", text).split())[:MAX_TITLE].strip())
+
+
 def _clean_titles(data) -> dict[str, str]:
     out = {}
     if isinstance(data, dict):
         for k, v in data.items():
-            if isinstance(k, str) and isinstance(v, str) and v.strip():
-                out[k] = title_case(" ".join(v.split())[:MAX_TITLE])
+            if isinstance(k, str) and 0 < len(k) <= MAX_ID and isinstance(v, str):
+                v = clean_title(v)
+                if v:
+                    out[k] = v
     return out
 
 
@@ -581,7 +597,9 @@ def load_curation(path: Path = CURATION, legacy: Path = LEGACY_TITLES) -> tuple[
     titles = _clean_titles(data.get("titles"))
     seen = set()
     for pid in data.get("order") or []:
-        if isinstance(pid, str) and pid not in seen:
+        if len(order) >= MAX_ORDER:
+            break
+        if isinstance(pid, str) and 0 < len(pid) <= MAX_ID and pid not in seen:
             seen.add(pid)
             order.append(pid)
     return titles, order
@@ -607,11 +625,25 @@ def apply_order(photos: list, order: list[str]) -> list:
 
 
 def apply_titles(entries: list[dict], titles: dict[str, str]) -> None:
-    """Titles set in the editor win over captions from the album."""
+    """Titles set in the editor win over captions from the album.
+
+    The album's own caption (often empty) is kept as `album_caption` so the
+    page can fall back to it if the title is removed in the live data.
+    """
     for e in entries:
         t = titles.get(e.get("id", ""))
         if t:
+            e["album_caption"] = e.get("caption") or ""
             e["caption"] = t
+
+
+def data_settings(config: dict) -> dict:
+    """Where the page reads live titles/order from and the editor saves them."""
+    repo = str(config.get("data_repo") or "")
+    if not DATA_REPO_RE.fullmatch(repo):
+        return {"data_repo": "", "data_url": ""}
+    return {"data_repo": repo,
+            "data_url": f"https://raw.githubusercontent.com/{repo}/main/curation.json"}
 
 
 def build(photos: list[Photo], config: dict) -> None:
@@ -643,9 +675,8 @@ def build(photos: list[Photo], config: dict) -> None:
 
     apply_titles(entries, titles)
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
-    # `repo` tells the page's title editor where titles.json lives.
     cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,
-               repo=os.environ.get("GITHUB_REPOSITORY", ""))
+               **data_settings(config))
     (OUT / "config.json").write_text(json.dumps(cfg))
 
     site_url = os.environ.get("SITE_URL", "").rstrip("/")

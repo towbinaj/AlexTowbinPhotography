@@ -37,8 +37,11 @@ owner's iCloud shared album, processes them, and builds a static site into
   API tokens).
 - **Photo titles and order are set on the site** (owner chose this; `#edit` mode, a
   fine-grained GitHub key with Contents read/write on this repo only, stored in
-  the owner's browser). Saves write `curation.json` (`{titles, order}`) via
-  the GitHub API, which triggers a deploy. Unplaced (new) photos sort first. Titles are optional: untitled photos show the date. Apple
+  the owner's browser) — the key is scoped to the **data repo**
+  `towbinaj/AlexTowbinPhotographyData` only. Saves write `curation.json`
+  (`{titles, order}`) there via the GitHub API; the page reads it live from
+  raw.githubusercontent.com and the build bakes it in (CI checks it out into
+  `data/`). Treat it as untrusted input (validate, render as text only). Unplaced (new) photos sort first. Titles are optional: untitled photos show the date. Apple
   captions/comments are not reachable through the public album link (tested).
   Never put a key in the repo or the build. Titles are title-cased by both
   `title_case()` (build.py) and `site/titlecase.js`; keep them identical
@@ -49,8 +52,8 @@ owner's iCloud shared album, processes them, and builds a static site into
 
 ## Layout
 ```
-config.json                 site settings (name, tagline, about, sort, copyright…)
-curation.json               {titles: {id: title}, order: [ids]}, written by the site's #edit mode
+config.json                 site settings (name, tagline, about, sort, copyright, data_repo…)
+data/                       (git-ignored) checkout of the data repo with curation.json
 scripts/build.py            iCloud fetch → image processing → _site/
 site/index.html|style.css|app.js|titlecase.js|robots.txt   static front end (no framework, no build step)
 tests/test_icloud.py        offline tests (fake iCloud responses; no network)

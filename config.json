@@ -8,5 +8,6 @@
   "max_photos": 0,
   "trim_white_borders": false,
   "copyright_holder": "Alex Towbin",
-  "copyright_start_year": 2026
+  "copyright_start_year": 2026,
+  "data_repo": "towbinaj/AlexTowbinPhotographyData"
 }

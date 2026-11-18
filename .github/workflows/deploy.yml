@@ -22,6 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Photo titles + order (curation.json) live in a separate public repo,
+      # written by the site's editor. Baked in here for JSON-LD / search; the
+      # page also reads it live.
+      - uses: actions/checkout@v4
+        with:
+          repository: towbinaj/AlexTowbinPhotographyData
+          path: data
+          persist-credentials: false
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

@@ -41,6 +41,16 @@
     return tokens.join("");
   }
 
+  // Untrusted title -> safe display text. Kept identical to clean_title() in
+  // build.py: control/invisible characters become spaces, whitespace
+  // collapses, at most 200 characters, then title case.
+  const CONTROL = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/g;
+  function cleanTitle(text) {
+    const flat = String(text).replace(CONTROL, " ").split(/\s+/).filter(Boolean).join(" ");
+    return titleCase([...flat].slice(0, 200).join("").trim());
+  }
+
   root.titleCase = titleCase;
-  if (typeof module !== "undefined") module.exports = titleCase;
+  root.cleanTitle = cleanTitle;
+  if (typeof module !== "undefined") { module.exports = titleCase; module.exports.cleanTitle = cleanTitle; }
 })(typeof window !== "undefined" ? window : globalThis);

@@ -51,6 +51,7 @@ Edit `config.json`:
 | `copyright_holder` | name in the copyright notice (defaults to `name`) |
 | `copyright_start_year` | first year of the notice, e.g. `2026` → "© 2026–2027 …" in later years |
 | `trim_white_borders` | `false` (default) keeps photos exactly as framed; `true` crops uniform white borders |
+| `data_repo` | `owner/repo` holding `curation.json` (titles + order); the editor saves there |
 
 ### Photo titles and order
 Titles and the order of the photos are set on the site itself. Titles appear
@@ -61,15 +62,17 @@ month they were taken.
 1. On GitHub, create a key: *Settings → Developer settings → Personal access
    tokens → Fine-grained tokens → Generate new token*
    (or open https://github.com/settings/personal-access-tokens/new).
-   - **Repository access:** *Only select repositories* → this site's repository.
+   - **Repository access:** *Only select repositories* → **AlexTowbinPhotographyData**
+     (the photo data repository, not the site's). The key can't touch the
+     site's code, its build, or the album link.
    - **Permissions:** *Contents* → **Read and write**. Nothing else.
    - **Expiration:** your choice. When it expires, saving says so; make a new key.
 2. Open the site with `#edit` at the end of the address
    (e.g. `…/AlexTowbinPhotography/#edit`) and paste the key.
 
 **Editing:** open any photo. Type its title in the field under it, and/or
-change its **No.** (its position, 1 = first) and tap **Save**. It's live in
-about 2 minutes. Clear the title and save to remove it. Put your strongest
+change its **No.** (its position, 1 = first) and tap **Save**. Visitors see
+it within about 5 minutes (the page reads the data live; no rebuild). Clear the title and save to remove it. Put your strongest
 photo first and your second-strongest last. Tap **Done** to hide the editor;
 visiting with `#edit` turns it back on.
 
@@ -84,7 +87,15 @@ kept as typed.
 The key is stored only in that browser (*Forget key* removes it), and visitors
 never see the editor.
 
-Everything is saved to `curation.json` in the repository, keyed by photo.
+Everything is saved to `curation.json` in the separate, public data repository
+[towbinaj/AlexTowbinPhotographyData](https://github.com/towbinaj/AlexTowbinPhotographyData)
+(`data_repo` in `config.json`), keyed by photo. The page reads it live from
+`raw.githubusercontent.com`; the nightly build also bakes it in (for search
+and the JSON-LD). Both treat it as untrusted: titles are cleaned (no control
+characters, at most 200 characters, title case), only known photo ids count,
+and everything is shown as plain text. A Content-Security-Policy lets only
+the site's own scripts run. For a local build with real titles, clone the
+data repo into `data/` (git-ignored) or set `CURATION_FILE`.
 Editing a photo again in Snapseed creates a new version of it, which starts
 untitled and unplaced.
 

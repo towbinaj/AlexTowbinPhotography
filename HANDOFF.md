@@ -122,7 +122,20 @@ supported as a fallback, which `download_album()` picks from the token shape.
 - **Embedded description:** only the 7 Olympus photos have
   `ImageDescription`, all the camera default "OLYMPUS DIGITAL CAMERA".
 
-## Next project: phone editing app (approved by the owner, not started)
+## Next project: phone editing app (approved by the owner, in progress)
+
+**Step 1 done on branch `claude/elegant-hypatia-rpwb2z` (not merged yet):**
+`curation.json` moved to the public data repo
+`towbinaj/AlexTowbinPhotographyData` (also on its branch of the same name).
+Site reads it live from raw.githubusercontent.com (≈5 min CDN cache), bakes
+it in at build (`data/` checkout in `deploy.yml`, `CURATION_FILE` override),
+validates it on both sides (`clean_title()` / `cleanTitle()`, kept identical,
+parity-tested), adds a CSP, and the `#edit` key now targets the data repo
+(new localStorage key name, so old keys are dropped). **Merge order:** merge
+the data repo branch first, re-sync `curation.json` from the site's `main` if
+it was edited meanwhile, then merge the site. Then the owner makes the new
+key (data repo only) and deletes the old site-repo key. Next: step 3, the
+`/edit/` app.
 The owner wants a small editor on their phone: set a title, assign a photo to
 a **collection** (series), set its **position within the collection**, toggle
 a **main-page highlight**, and **check its location**. Agreed design:

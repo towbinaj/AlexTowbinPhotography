@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://raw.githubusercontent.com https://api.github.com; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{TITLE}}</title>
   <meta name="description" content="{{DESCRIPTION}}">
@@ -128,9 +130,9 @@
     <form class="edit-card" id="edit-form" autocomplete="off">
       <h2 id="edit-setup-h">Edit titles on this device</h2>
       <p>Paste your GitHub key. It's kept only in this browser and used only to save
-         titles to this site's repository.</p>
+         titles and order to the photo data repository.</p>
       <p class="mono edit-help"><a id="edit-key-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a key on GitHub ↗</a>
-         — only this repository, with “Contents: read and write”.</p>
+         — only the photo data repository, with “Contents: read and write”.</p>
       <input id="edit-key" type="password" placeholder="github_pat_…" spellcheck="false" autocapitalize="off">
       <p class="edit-error mono" id="edit-error" role="alert"></p>
       <div class="edit-actions mono">

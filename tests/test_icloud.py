@@ -1,6 +1,7 @@
 """Offline tests for the iCloud album readers and image helpers (no network)."""
 import base64
 import sys
+import json
 from pathlib import Path
 
 from PIL import Image
@@ -208,6 +209,8 @@ def test_titles_override_album_captions():
     entries = [{"id": "a", "caption": "from album"}, {"id": "b", "caption": ""}, {"id": "c", "caption": "keep"}]
     build.apply_titles(entries, {"a": "Edited", "b": "New"})
     assert [e["caption"] for e in entries] == ["Edited", "New", "keep"]
+    # the page falls back to these if the live data drops the title
+    assert [e.get("album_caption") for e in entries] == ["from album", "", None]
 
 
 # ---- curation.json: titles + chosen order ----
@@ -261,3 +264,49 @@ def test_title_case_js_matches_python():
                          capture_output=True, text=True, check=True).stdout
     cases = json.loads((root / "tests" / "titlecase_cases.json").read_text())
     assert json.loads(out) == [want for _, want in cases]
+
+
+# ---- data repo: curation.json is untrusted input ----
+
+UNTRUSTED_TITLES = [
+    "shine a light",
+    "  bad\u0000title\u202eevil\u200b\n\ttabs  ",
+    "<script>alert(1)</script>",
+    "x" * 300,
+    "😀" * 250,
+    "\ufeffnyc at night",
+    "\u0085next\u2028line",
+]
+
+
+def test_untrusted_curation_is_cleaned(tmp_path):
+    cur = tmp_path / "curation.json"
+    cur.write_text(json.dumps({
+        "titles": {"a": UNTRUSTED_TITLES[1], "b": "x" * 300, "c": ["list"], "": "empty id",
+                   "i" * 65: "long id", "d": "\u200b"},
+        "order": ["a"] * 3 + [{"x": 1}, "i" * 65, "b"],
+    }))
+    titles, order = build.load_curation(cur, tmp_path / "none.json")
+    assert titles == {"a": "Bad Title Evil Tabs", "b": "X" + "x" * 199}
+    assert order == ["a", "b"]
+
+
+def test_data_settings_only_accepts_owner_slash_repo():
+    s = build.data_settings({"data_repo": "towbin/Photo-Data"})
+    assert s["data_url"] == "https://raw.githubusercontent.com/towbin/Photo-Data/main/curation.json"
+    for bad in ["", None, "nope", "a/b/c", "evil.com/x?y", "a/b#c", "../x"]:
+        assert build.data_settings({"data_repo": bad}) == {"data_repo": "", "data_url": ""}
+
+
+def test_clean_title_js_matches_python():
+    import shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node not installed")
+    root = Path(__file__).resolve().parent.parent
+    script = ("const {cleanTitle}=require(process.argv[1]);"
+              "process.stdout.write(JSON.stringify(JSON.parse(process.argv[2]).map(cleanTitle)));")
+    out = subprocess.run([node, "-e", script, str(root / "site" / "titlecase.js"), json.dumps(UNTRUSTED_TITLES)],
+                         capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == [build.clean_title(t) for t in UNTRUSTED_TITLES]

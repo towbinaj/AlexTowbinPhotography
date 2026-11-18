@@ -169,7 +169,10 @@ the gallery (hidden until a collection exists), `#collection-<slug>` deep
 links, heading becomes the collection name, lightbox steps within it. Built
 from live data, baked fallback in `config.json` `collections`
 (`load_collections()`). `#edit` forces *All* (positions are global).
-Still to do: highlights on the main page/hero; optional Face ID lock;
+**Highlights (branch):** the hero slideshow shows highlighted photos in main
+page order (max 12; live data, baked fallback `config.json` `highlights`,
+`load_highlights()`); none → old newest+random behavior.
+Still to do: optional Face ID lock;
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the
 main page/hero, build-side validation of the new fields); then remove `#edit`.

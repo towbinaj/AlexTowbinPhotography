@@ -492,3 +492,11 @@ def test_load_collections_matches_site_rules(tmp_path):
     assert build.load_collections(cur, known={"a", "b", "c", "d"}) == [
         {"name": "Florence at Night", "photos": ["a", "b"]}, {"name": "Other", "photos": ["c"]}]
     assert build.load_collections(tmp_path / "missing.json") == []
+
+
+def test_load_highlights_dedupes_and_keeps_known(tmp_path):
+    cur = tmp_path / "curation.json"
+    cur.write_text(json.dumps({"highlights": ["a", "a", 3, "gone", "b", "x" * 65]}))
+    assert build.load_highlights(cur, known={"a", "b"}) == ["a", "b"]
+    cur.write_text('{"highlights": "a"}')
+    assert build.load_highlights(cur) == []

@@ -140,7 +140,7 @@ background) and opens full screen.
 
 Locations and collections show on the site within minutes (see below). Tags
 stay private to the app (for your own sorting and search); search engines get
-them as hidden keywords. Highlights are saved but don't change the site yet. New album photos show up in the app after the nightly build.
+them as hidden keywords. Highlights become the opening slideshow. New album photos show up in the app after the nightly build.
 
 ## The site
 - **Opening screen:** your name in large serif type beside a slideshow of
@@ -148,6 +148,9 @@ them as hidden keywords. Highlights are saved but don't change the site yet. New
 - **Stream view:** staggered columns that drift at slightly different speeds
   as you scroll, with photos revealed as they come into view.
 - **Index view:** a dense grid of everything.
+- **Opening slideshow:** photos you mark *Highlight* in the app, in your main
+  page order (up to 12). With none marked, it shows the newest few photos and
+  a random mix of the rest. One highlight shows as a single still image.
 - **Collections:** once you make a collection in the app, links appear above
   the gallery: *All* plus each collection with its count. Choosing one shows
   just that series, in its own order, with its name as the heading. Each has

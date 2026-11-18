@@ -88,12 +88,18 @@
   }
 
   // ---------------- hero slideshow ----------------
-  function hero() {
+  // Highlighted photos (set in the editor app) are the slideshow, in main page
+  // order. With none, it shows the newest few, then a random sample.
+  const MAX_SLIDES = 12;
+  function highlightsFrom(raw) {
+    const ids = new Set(Array.isArray(raw) ? raw.slice(0, 5000).filter((id) => typeof id === "string") : []);
+    return allPhotos.filter((p) => ids.has(p.id)).slice(0, MAX_SLIDES);
+  }
+  function hero(highlights) {
     const media = $("hero-media");
     $("hero-count").textContent = `${pad2(allPhotos.length)} photographs`;
-    // Newest few first, then a random sample of the rest.
     const rest = allPhotos.slice(3).sort(() => Math.random() - 0.5);
-    const picks = allPhotos.slice(0, 3).concat(rest).slice(0, 6);
+    const picks = highlights.length ? highlights : allPhotos.slice(0, 3).concat(rest).slice(0, 6);
     const slides = picks.map((p, i) => {
       const s = document.createElement("div"); s.className = "slide";
       s.appendChild(makeImg(p, "(max-width: 860px) 100vw, 45vw", i === 0));
@@ -672,11 +678,12 @@
   ]).then(([cfg, list, live]) => {
     // Live collections when the data repo answered, else the copy baked in at build.
     const rawCollections = isObj(live) ? live.collections : cfg.collections;
+    const rawHighlights = isObj(live) ? live.highlights : cfg.highlights;
     applyConfig(cfg);
     allPhotos = photos = Array.isArray(list) ? applyLive(list, live) : [];
     cursor();
     if (!photos.length) { $("empty").hidden = false; $("hero-media").hidden = true; return; }
-    hero();
+    hero(highlightsFrom(rawHighlights));
     buildTiles();
     lastW = masonry.clientWidth;
     layout();

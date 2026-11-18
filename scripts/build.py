@@ -736,6 +736,17 @@ def load_collections(path: Path = CURATION, known: set[str] | None = None) -> li
     return out
 
 
+def load_highlights(path: Path = CURATION, known: set[str] | None = None) -> list[str]:
+    """Photo ids featured in the main page's opening slideshow (editor app)."""
+    data = _read_json(path)
+    raw = data.get("highlights") if isinstance(data, dict) else None
+    out: list[str] = []
+    for pid in raw[:MAX_ORDER] if isinstance(raw, list) else []:
+        if isinstance(pid, str) and 0 < len(pid) <= MAX_ID and pid not in out and (known is None or pid in known):
+            out.append(pid)
+    return out
+
+
 def apply_meta(entries: list[dict], tags: dict[str, list[str]], places: dict[str, dict]) -> None:
     for e in entries:
         if tags.get(e["id"]):
@@ -817,6 +828,7 @@ def build(photos: list[Photo], config: dict) -> None:
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
     cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,
                collections=load_collections(known={e["id"] for e in entries}),
+               highlights=load_highlights(known={e["id"] for e in entries}),
                **data_settings(config))
     (OUT / "config.json").write_text(json.dumps(cfg))
 

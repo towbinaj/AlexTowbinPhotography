@@ -187,7 +187,7 @@
       view = b.dataset.view;
       document.querySelectorAll(".view-toggle button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       const swap = () => layout();
-      if (document.startViewTransition && !reduceMotion) document.startViewTransition(swap); else swap();
+      if (document.startViewTransition && !reduceMotion) transition(swap); else swap();
     });
   });
 
@@ -208,6 +208,14 @@
       el.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
       requestAnimationFrame(loop);
     })();
+  }
+
+  // Run `fn` as a view transition. If another one interrupts it, the DOM update
+  // still happens; the rejected animation promises are expected, so swallow them.
+  function transition(fn) {
+    const t = document.startViewTransition(fn);
+    t.ready.catch(() => {}); t.finished.catch(() => {});
+    return t;
   }
 
   // ---------------- lightbox ----------------
@@ -236,6 +244,7 @@
     const p = photos[current];
     $("lb-count").textContent = `${pad2(current + 1)} / ${pad2(photos.length)}`;
     $("lb-caption").textContent = [p.caption, monthYear(p.taken)].filter(Boolean).join(" — ");
+    if (editor.on) editor.show(p);
     history.replaceState(null, "", `#photo-${p.id}`);
     for (const d of [1, -1]) { // warm the neighbours
       const n = photos[(current + d + photos.length) % photos.length];
@@ -259,7 +268,7 @@
     };
     if (document.startViewTransition && fromImg && !reduceMotion) {
       fromImg.style.viewTransitionName = "active-photo";
-      document.startViewTransition(reveal);
+      transition(reveal);
     } else {
       lb.classList.add("anim-in");
       reveal();
@@ -271,7 +280,7 @@
     current = (current + d + photos.length) % photos.length;
     const p = photos[current];
     const go = () => { setLbImage(p, p.src[Math.min(1, p.src.length - 1)].url); fillBar(); };
-    if (document.startViewTransition && !reduceMotion) document.startViewTransition(go); else go();
+    if (document.startViewTransition && !reduceMotion) transition(go); else go();
   }
 
   function closePhoto() {
@@ -287,7 +296,7 @@
     };
     history.replaceState(null, "", location.pathname + location.search);
     if (document.startViewTransition && visible && !reduceMotion) {
-      document.startViewTransition(hide).finished.finally(() => { target.style.viewTransitionName = ""; });
+      transition(hide).finished.finally(() => { target.style.viewTransitionName = ""; }).catch(() => {});
     } else {
       hide();
       if (target) target.style.viewTransitionName = "";
@@ -299,14 +308,16 @@
   $("lb-prev").addEventListener("click", () => step(-1));
   $("lb-next").addEventListener("click", () => step(1));
   $("lb-stage").addEventListener("click", (e) => { if (e.target === e.currentTarget) closePhoto(); });
+  const typing = (t) => t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
   document.addEventListener("keydown", (e) => {
-    if (lb.hidden) return;
+    if (lb.hidden || !$("edit-setup").hidden) return;
+    if (typing(e.target)) { if (e.key === "Escape") e.target.blur(); return; }
     if (e.key === "Escape") closePhoto();
     else if (e.key === "ArrowLeft") step(-1);
     else if (e.key === "ArrowRight") step(1);
   });
   let tx = null, ty = null;
-  lb.addEventListener("touchstart", (e) => { if (e.touches.length === 1) { tx = e.touches[0].clientX; ty = e.touches[0].clientY; } }, { passive: true });
+  lb.addEventListener("touchstart", (e) => { if (e.target.closest(".lb-edit")) { tx = null; return; } if (e.touches.length === 1) { tx = e.touches[0].clientX; ty = e.touches[0].clientY; } }, { passive: true });
   lb.addEventListener("touchend", (e) => {
     if (tx === null) return;
     const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
@@ -318,6 +329,146 @@
   const guarded = (t) => t && t.closest && (t.tagName === "IMG" || t.closest(".ph, .hero-media, .lb-stage"));
   document.addEventListener("contextmenu", (e) => { if (guarded(e.target)) e.preventDefault(); });
   document.addEventListener("dragstart", (e) => { if (guarded(e.target)) e.preventDefault(); });
+
+  // ---------------- title editor (owner only) ----------------
+  // Visiting the site with #edit asks for a GitHub key (kept in this browser
+  // only). While editing is on, the lightbox shows a title field; saving
+  // writes titles.json in the repo, and the next build publishes it.
+  const editor = (() => {
+    const KEY = "at-title-key", ON = "at-title-edit";
+    const store = {
+      get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: lasts this visit */ } },
+      del(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
+    };
+    let repo = "", memKey = null;
+    const key = () => store.get(KEY) || memKey;
+    const api = () => `https://api.github.com/repos/${repo}/contents/titles.json`;
+    const headers = () => ({ Authorization: `Bearer ${key()}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" });
+    const b64enc = (str) => { const bytes = new TextEncoder().encode(str); let bin = ""; for (const b of bytes) bin += String.fromCharCode(b); return btoa(bin); };
+    const b64dec = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
+    const why = (status) =>
+      status === 401 ? "GitHub didn't accept the key (it may have expired). Visit the site with #edit to set a new one." :
+      status === 403 || status === 404 ? "This key can't save to the site's repository. It needs Contents: read and write." :
+      status === 409 || status === 422 ? "Someone saved at the same moment. Try again." :
+      `Couldn't save (GitHub error ${status}). Try again.`;
+
+    async function readTitles() {
+      const r = await fetch(api() + "?ref=main", { headers: headers(), cache: "no-store" });
+      if (r.status === 404) return { data: {}, sha: undefined };
+      if (!r.ok) throw new Error(why(r.status));
+      const j = await r.json();
+      let data = {};
+      try { data = JSON.parse(b64dec(j.content || "")) || {}; } catch { data = {}; }
+      return { data: typeof data === "object" && !Array.isArray(data) ? data : {}, sha: j.sha };
+    }
+
+    async function save(id, title) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data, sha } = await readTitles();
+        if (title) data[id] = title; else delete data[id];
+        const sorted = Object.fromEntries(Object.keys(data).sort().map((k) => [k, data[k]]));
+        const body = {
+          message: title ? `Title for photo ${id}: ${title}` : `Remove title for photo ${id}`,
+          content: b64enc(JSON.stringify(sorted, null, 2) + "\n"),
+          branch: "main",
+          ...(sha ? { sha } : {}),
+        };
+        const w = await fetch(api(), { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (w.ok) return;
+        if ((w.status === 409 || w.status === 422) && attempt === 0) continue; // file changed underneath us: re-read once
+        throw new Error(why(w.status));
+      }
+    }
+
+    const form = $("lb-edit"), input = $("lb-title"), status = $("lb-edit-status"), btn = $("lb-title-save");
+    const setStatus = (msg, err) => { status.textContent = msg; status.classList.toggle("err", !!err); };
+
+    function applyLocally(p, title) {
+      p.caption = title;
+      const i = photos.indexOf(p);
+      const cap = tiles[i] && tiles[i].querySelector(".cap");
+      if (cap) cap.textContent = title || monthYear(p.taken);
+      if (tiles[i]) tiles[i].setAttribute("aria-label", title ? `Open: ${title}` : `Open photo ${i + 1}`);
+      if (photos[current] === p) {
+        $("lb-caption").textContent = [title, monthYear(p.taken)].filter(Boolean).join(" — ");
+        lbImg.alt = title;
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const p = photos[current];
+      if (!p) return;
+      const title = input.value.replace(/\s+/g, " ").trim().slice(0, 200);
+      btn.disabled = true; setStatus("Saving…");
+      try {
+        await save(p.id, title);
+        applyLocally(p, title);
+        input.value = title;
+        setStatus(title ? "Saved · live in ~2 min" : "Removed · live in ~2 min");
+      } catch (err) {
+        setStatus(err.message || "Couldn't save. Try again.", true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    const setup = $("edit-setup"), keyIn = $("edit-key"), errEl = $("edit-error");
+    function openSetup() {
+      keyIn.value = ""; errEl.textContent = "";
+      $("edit-forget").hidden = !key();
+      setup.hidden = false;
+      keyIn.focus();
+    }
+    const closeSetup = () => { setup.hidden = true; };
+
+    $("edit-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const k = keyIn.value.trim();
+      if (!k) { errEl.textContent = "Paste the key first."; return; }
+      errEl.textContent = "Checking…";
+      try {
+        const r = await fetch(`https://api.github.com/repos/${repo}`, { headers: { ...headers(), Authorization: `Bearer ${k}` }, cache: "no-store" });
+        if (!r.ok) { errEl.textContent = r.status === 401 ? "GitHub didn't accept that key." : "That key can't see this site's repository."; return; }
+        const j = await r.json();
+        if (j.permissions && j.permissions.push === false) { errEl.textContent = "That key can read but not save. It needs Contents: read and write."; return; }
+      } catch {
+        errEl.textContent = "Couldn't reach GitHub. Check your connection and try again."; return;
+      }
+      memKey = k; store.set(KEY, k);
+      closeSetup(); turnOn();
+    });
+    $("edit-cancel").addEventListener("click", closeSetup);
+    $("edit-forget").addEventListener("click", () => { store.del(KEY); memKey = null; turnOff(); closeSetup(); });
+    $("edit-done").addEventListener("click", () => turnOff());
+
+    const api_ = {
+      on: false,
+      show(p) { input.value = p.caption || ""; setStatus(""); },
+      init(cfg) {
+        repo = (cfg && cfg.repo) || "";
+        if (location.hash === "#edit") {
+          history.replaceState(null, "", location.pathname + location.search);
+          if (!repo) { alert("Title editing works on the published site only."); return; }
+          if (key()) turnOn(); else openSetup();
+        } else if (repo && key() && store.get(ON) === "1") {
+          turnOn();
+        }
+      },
+    };
+    function turnOn() {
+      api_.on = true; store.set(ON, "1");
+      form.hidden = false; $("edit-pill").hidden = false;
+      if (!lb.hidden && photos[current]) api_.show(photos[current]);
+    }
+    function turnOff() {
+      api_.on = false; store.del(ON);
+      form.hidden = true; $("edit-pill").hidden = true;
+    }
+    addEventListener("hashchange", () => { if (location.hash === "#edit") api_.init({ repo }); });
+    return api_;
+  })();
 
   // ---------------- boot ----------------
   let lastW = 0, rt;
@@ -340,5 +491,6 @@
     layout();
     const m = location.hash.match(/^#photo-(.+)$/);
     if (m) openPhoto(photos.findIndex((p) => p.id === m[1]), null);
+    editor.init(cfg);
   });
 })();

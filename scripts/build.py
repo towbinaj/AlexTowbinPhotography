@@ -506,6 +506,36 @@ def json_ld(entries: list[dict], config: dict, r: dict, site_url: str) -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
 
+TITLES = ROOT / "titles.json"
+MAX_TITLE = 200
+
+
+def load_titles(path: Path = TITLES) -> dict[str, str]:
+    """Photo id -> title, from titles.json (written by the site's title editor).
+
+    A bad or missing file just means no titles; it never fails the build.
+    """
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out = {}
+    for k, v in data.items():
+        if isinstance(k, str) and isinstance(v, str) and v.strip():
+            out[k] = " ".join(v.split())[:MAX_TITLE]
+    return out
+
+
+def apply_titles(entries: list[dict], titles: dict[str, str]) -> None:
+    """Titles set in the editor win over captions from the album."""
+    for e in entries:
+        t = titles.get(e.get("id", ""))
+        if t:
+            e["caption"] = t
+
+
 def build(photos: list[Photo], config: dict) -> None:
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -532,8 +562,11 @@ def build(photos: list[Photo], config: dict) -> None:
             og_written = True
         entries.append(e)
 
+    apply_titles(entries, load_titles())
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
-    cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r)
+    # `repo` tells the page's title editor where titles.json lives.
+    cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,
+               repo=os.environ.get("GITHUB_REPOSITORY", ""))
     (OUT / "config.json").write_text(json.dumps(cfg))
 
     site_url = os.environ.get("SITE_URL", "").rstrip("/")

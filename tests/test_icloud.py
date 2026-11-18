@@ -188,3 +188,23 @@ def test_json_ld_is_safe_and_credits_holder():
     assert img["creator"]["name"] == "Test Person" and img["copyrightNotice"] == r["notice"]
     assert img["contentUrl"] == "https://example.org/site/img/a-2.webp"
     assert img["license"] == "https://example.org/site/#rights"
+
+
+# ---- titles.json (written by the site's title editor) ----
+
+def test_load_titles_tolerates_junk(tmp_path):
+    f = tmp_path / "titles.json"
+    assert build.load_titles(f) == {}                       # missing
+    f.write_text("not json")
+    assert build.load_titles(f) == {}
+    f.write_text('["a list"]')
+    assert build.load_titles(f) == {}
+    f.write_text('{"abc": "  Wacker   Drive \\n", "def": "", "ghi": 5, "jkl": "' + "x" * 300 + '"}')
+    t = build.load_titles(f)
+    assert t["abc"] == "Wacker Drive" and "def" not in t and "ghi" not in t and len(t["jkl"]) == 200
+
+
+def test_titles_override_album_captions():
+    entries = [{"id": "a", "caption": "from album"}, {"id": "b", "caption": ""}, {"id": "c", "caption": "keep"}]
+    build.apply_titles(entries, {"a": "Edited", "b": "New"})
+    assert [e["caption"] for e in entries] == ["Edited", "New", "keep"]

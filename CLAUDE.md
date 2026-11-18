@@ -7,7 +7,7 @@ Conventions for working in this repo. **This repo is public.** Read
 A self-updating photography portfolio on GitHub Pages:
 https://towbinaj.github.io/AlexTowbinPhotography/
 
-A GitHub Action (`.github/workflows/deploy.yml`) runs nightly, on every push to
+A GitHub Action (`.github/workflows/deploy.yml`) runs hourly (:17), on every push to
 `main`, and on demand. It runs `scripts/build.py`, which pulls photos from the
 owner's iCloud shared album, processes them, and builds a static site into
 `_site/`, which is deployed to Pages. Photos are **never committed**.

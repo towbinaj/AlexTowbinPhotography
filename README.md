@@ -4,8 +4,9 @@ A photography portfolio that updates itself from an iCloud shared album and is
 hosted free on GitHub Pages at **https://towbinaj.github.io/AlexTowbinPhotography/**.
 
 **To add or remove a photo, add it to (or remove it from) the shared album in
-Apple Photos.** A GitHub Action rebuilds the site every night. To update it
-right away, go to *Actions → Build & deploy site → Run workflow*.
+Apple Photos.** A GitHub Action rebuilds the site **every hour** (at :17), so
+new photos appear on the site and in the editor app within about an hour. To
+update it right away, go to *Actions → Build & deploy site → Run workflow*.
 
 ## How it works
 1. A scheduled GitHub Action (`.github/workflows/deploy.yml`) runs `scripts/build.py`.
@@ -20,7 +21,10 @@ right away, go to *Actions → Build & deploy site → Run workflow*.
    Photos are never committed to the repo.
 
 If iCloud is unreachable or returns an empty album, the build fails and the
-site keeps showing the last good version. GitHub emails you about failed runs.
+site keeps showing the last good version. GitHub emails you about failed runs
+(with hourly builds, an iCloud outage can mean one email per hour until it's
+back). Downloaded originals are cached between runs; a new cache copy is saved
+only when the set of photos changes.
 
 ## One-time setup
 1. **Album link:** in Photos, open the shared album → Manage Shared Album →
@@ -87,7 +91,7 @@ the app replaces it.)
 Everything (also collections and highlights from the phone app) is saved to `curation.json` in the separate, public data repository
 [towbinaj/AlexTowbinPhotographyData](https://github.com/towbinaj/AlexTowbinPhotographyData)
 (`data_repo` in `config.json`), keyed by photo. The page reads it live from
-`raw.githubusercontent.com`; the nightly build also bakes it in (for search
+`raw.githubusercontent.com`; each build also bakes it in (for search
 and the JSON-LD). Both treat it as untrusted: titles are cleaned (no control
 characters, at most 200 characters, title case), only known photo ids count,
 and everything is shown as plain text. A Content-Security-Policy lets only
@@ -154,7 +158,7 @@ background) and opens full screen.
 
 Locations and collections show on the site within minutes (see below). Tags
 stay private to the app (for your own sorting and search); search engines get
-them as hidden keywords. Highlights become the opening slideshow. New album photos show up in the app after the nightly build.
+them as hidden keywords. Highlights become the opening slideshow. New album photos show up in the app after the next hourly build.
 
 ## The site
 - **Opening screen:** your name in large serif type beside a slideshow of

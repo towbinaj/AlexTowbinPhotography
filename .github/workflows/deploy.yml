@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 9 * * *"   # daily, ~4am US Eastern: pick up new album photos
+    - cron: "17 * * * *"   # hourly: new album photos show up within about an hour
   workflow_dispatch:        # "Run workflow" button for an immediate refresh
 
 permissions:
@@ -41,10 +41,13 @@ jobs:
       - run: python -m pytest -q tests
 
       # Keep downloaded originals between runs so only new photos are fetched.
-      - uses: actions/cache@v4
+      # Restore the newest copy; save a new one only when the set of photos
+      # changed (hourly runs would otherwise store a ~0.5 GB copy every hour).
+      - id: originals
+        uses: actions/cache/restore@v4
         with:
           path: .cache/originals
-          key: originals-${{ github.run_id }}
+          key: originals-
           restore-keys: originals-
 
       - id: pages
@@ -55,6 +58,15 @@ jobs:
           ICLOUD_ALBUM: ${{ secrets.ICLOUD_ALBUM }}
           SITE_URL: ${{ steps.pages.outputs.base_url }}
         run: python scripts/build.py
+
+      - id: originals-key
+        run: echo "key=originals-$(ls .cache/originals 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.originals.outputs.cache-matched-key != steps.originals-key.outputs.key
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/originals
+          key: ${{ steps.originals-key.outputs.key }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

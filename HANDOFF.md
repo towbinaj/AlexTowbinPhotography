@@ -184,6 +184,13 @@ one failed UV it refuses until recreated; a test quirk). The site's `#edit`
 had no Face ID, so it was **removed** (2026-11-18); the site also clears the
 old key it left in that browser (same-origin `at-data-key`; note this also
 clears an unlocked app key in the same browser, never the home-screen app's).
+**Later on 2026-11-18 (all merged):** tag suggestions as tap-to-add chips
+(iOS datalist was unreliable); select-several in the app (bulk tags with
+all/some/none state, bulk collection, bulk location; `applyBulk`); hero
+slideshow fix (outgoing slide wipes out in step, next image preloaded);
+hover styles only for mouse (iOS sticky hover); **builds run hourly** at :17
+(owner wanted new photos sooner), originals cache saved only when the photo
+set changes (`actions/cache/restore` + `save`, key = hash of file names).
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the
@@ -202,7 +209,7 @@ a **main-page highlight**, and **check its location**. Agreed design:
    session can't create repositories. After migrating, the owner deletes the
    old key.
 2. **Publishing:** the site reads the data repo's JSON at runtime (edits
-   live within minutes, no rebuild); the nightly build bakes it in for JSON-LD
+   live within minutes, no rebuild); the hourly build bakes it in for JSON-LD
    / search. Build and page treat the data as untrusted: validate (lengths,
    known photo ids, title case, collection names), render as text only
    (JSON-LD already escapes `</`). Add a Content-Security-Policy so only

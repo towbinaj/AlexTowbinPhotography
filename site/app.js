@@ -360,7 +360,7 @@
     async function getJSON(file) {
       const r = await fetch(api(file) + "?ref=main", { headers: headers(), cache: "no-store" });
       if (r.status === 404) return { exists: false };
-      if (!r.ok) throw new Error(why(r.status));
+      if (!r.ok) { dropIfRejected(r.status); throw new Error(why(r.status)); }
       const j = await r.json();
       let data = null;
       try { data = JSON.parse(b64dec(j.content || "")); } catch { data = null; }
@@ -393,6 +393,7 @@
         const w = await fetch(api(), { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
         if (w.ok) return;
         if ((w.status === 409 || w.status === 422) && attempt === 0) continue; // file changed underneath us: re-read once
+        dropIfRejected(w.status);
         throw new Error(why(w.status));
       }
     }
@@ -459,10 +460,14 @@
     function openSetup() {
       keyIn.value = ""; errEl.textContent = "";
       $("edit-forget").hidden = !key();
+      keyIn.placeholder = key() ? "Key saved — paste a new one to replace it" : "github_pat_…";
       setup.hidden = false;
       keyIn.focus();
     }
     const closeSetup = () => { setup.hidden = true; };
+    // GitHub rejected the saved key (expired or regenerated): drop it so the
+    // next visit with #edit asks for the new one.
+    const dropIfRejected = (status) => { if (status === 401) { store.del(KEY); memKey = null; } };
 
     $("edit-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -480,7 +485,7 @@
       memKey = k; store.set(KEY, k);
       closeSetup(); turnOn();
     });
-    $("edit-cancel").addEventListener("click", closeSetup);
+    $("edit-cancel").addEventListener("click", () => { closeSetup(); if (key()) turnOn(); });
     $("edit-forget").addEventListener("click", () => { store.del(KEY); memKey = null; turnOff(); closeSetup(); });
     $("edit-done").addEventListener("click", () => turnOff());
 
@@ -498,7 +503,7 @@
         if (location.hash === "#edit") {
           history.replaceState(null, "", location.pathname + location.search);
           if (!repo) { alert("Title editing works on the published site only."); return; }
-          if (key()) turnOn(); else openSetup();
+          openSetup(); // always: lets a replaced key be pasted; Cancel keeps a saved one
         } else if (repo && key() && store.get(ON) === "1") {
           turnOn();
         }

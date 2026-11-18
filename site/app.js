@@ -109,17 +109,27 @@
       return s;
     });
     let cur = 0;
+    // Load the next print while this one shows, and only switch once it has
+    // loaded, so the wipe never reveals an empty frame.
+    const img = (i) => slides[i].querySelector("img");
+    const warm = (i) => { if (slides.length > 1) img(i).loading = "eager"; };
+    const ready = (i) => img(i).complete && img(i).naturalWidth > 0;
     const show = (i) => {
       slides.forEach((s) => s.classList.remove("was"));
       slides[cur].classList.replace("on", "was");
       cur = i;
       slides[cur].classList.add("on");
       $("hero-index").textContent = `${pad2(cur + 1)} — ${pad2(slides.length)}`;
+      warm((cur + 1) % slides.length);
     };
     slides[0].classList.add("on");
     $("hero-index").textContent = `01 — ${pad2(slides.length)}`;
+    warm(1 % slides.length);
     if (slides.length > 1 && !reduceMotion) {
-      setInterval(() => { if (!document.hidden && $("lightbox").hidden) show((cur + 1) % slides.length); }, 5200);
+      setInterval(() => {
+        const next = (cur + 1) % slides.length;
+        if (!document.hidden && $("lightbox").hidden && ready(next)) show(next);
+      }, 5200);
     }
   }
 

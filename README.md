@@ -4,9 +4,11 @@ A photography portfolio that updates itself from an iCloud shared album and is
 hosted free on GitHub Pages at **https://towbinaj.github.io/AlexTowbinPhotography/**.
 
 **To add or remove a photo, add it to (or remove it from) the shared album in
-Apple Photos.** A GitHub Action rebuilds the site **every hour** (at :17), so
-new photos appear on the site and in the editor app within about an hour. To
-update it right away, go to *Actions → Build & deploy site → Run workflow*.
+Apple Photos.** A GitHub Action is scheduled to rebuild the site **every
+hour** (at :17), but GitHub skips many scheduled runs (it treats schedules as
+best effort), so it can take several hours. To update right away, tap
+**Publish now** in the editor app (or on GitHub: *Actions → Build & deploy
+site → Run workflow*).
 
 ## How it works
 1. A scheduled GitHub Action (`.github/workflows/deploy.yml`) runs `scripts/build.py`.
@@ -164,8 +166,17 @@ background) and opens full screen.
   the app ("On (app only)"). It uses a passkey saved in your iCloud Keychain;
   turn it on or off under **Key**. If Face ID can't unlock (e.g. the passkey
   was deleted), tap *Can't unlock?* and paste the key again.
-- **Key** (top right): see the expiry date, replace or forget the key, and
-  turn the Face ID lock on or off.
+- **Publish now** (above the grid): starts a site build right away, follows
+  it ("Publishing… about 5 min") and then shows new album photos (under
+  *Hidden*). Needs a **second key**, set once under **Key**: a fine-grained
+  key for **this site's repository only** with **Actions: Read and write**
+  and nothing else. It can start builds but can't change code, photo data or
+  the album secret, so "No expiration" is fine. (A GitHub key has one set of
+  permissions for every repository it covers, which is why this can't be
+  added to the main key without giving it write access to the site's code.)
+  With the Face ID lock, both keys are stored encrypted together.
+- **Key** (top right): see the expiry date, replace or forget the key, turn
+  the Face ID lock on or off, and add the publish key.
 
 Locations and collections show on the site within minutes (see below). Tags
 stay private to the app (for your own sorting and search); search engines get

@@ -180,4 +180,11 @@ form.inline { margin-top: 14px; flex-wrap: nowrap; }
 .showrow.off { border-color: var(--bad); }
 .showrow.off .shownote { color: var(--bad); }
 
+/* ---------- publish now ---------- */
+.pubbar { display: flex; align-items: center; gap: 10px; margin: 12px var(--pad) 0; padding: 8px 8px 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.pubbar #pub-status { flex: 1; min-width: 0; color: var(--muted); text-transform: none; letter-spacing: .02em; line-height: 1.4; }
+.pubbar.err #pub-status { color: var(--bad); }
+p.err.ok { color: var(--good); }
+#s-pub-note strong, #s-pub-note em { color: var(--fg); font-style: normal; }
+
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

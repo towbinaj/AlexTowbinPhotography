@@ -209,6 +209,16 @@ was avoided because link previewers may follow it); photos.json `page: true`;
 lightbox **Share** button (Web Share / clipboard). The stale
 `claude/location-check` branch is still there (deleting it from the session
 was not permitted); the owner can delete it on GitHub's Branches page.
+**Schedule reliability (2026-11-19):** after the owner's fix, GitHub ran the
+cron only twice in ~11 hourly slots (23:24, 07:28 UTC); every build that ran
+succeeded. Nothing wrong on our side (workflow active, default branch, :17):
+GitHub documents schedules as best effort and drops runs under load. Fix:
+**Publish now** in the editor (branch): POST
+`/actions/workflows/deploy.yml/dispatches` with a second fine-grained key
+(site repo, Actions RW only), then polls `/runs` and reloads photos.json.
+config.json gains `site_repo` (from GITHUB_REPOSITORY) and `built_at`. The
+Face ID lock seals `{"k": dataKey, "p": publishKey}` (plain string = old
+format, still read). The hourly cron stays as a backup.
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

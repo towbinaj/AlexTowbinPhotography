@@ -61,6 +61,10 @@
     </header>
     <div class="searchbar"><input id="list-search" type="search" placeholder="Search titles, places, tags" aria-label="Search photos" autocomplete="off" spellcheck="false" enterkeyhint="search"></div>
     <p class="banner mono" id="banner" hidden></p>
+    <div class="pubbar" id="pubbar" hidden>
+      <span class="mono" id="pub-status" role="status" aria-live="polite"></span>
+      <button type="button" class="btn ghost small" id="pub-now">Publish now</button>
+    </div>
     <nav class="chips mono" id="chips" aria-label="Filter"></nav>
     <div class="grid" id="grid"></div>
     <p class="empty mono" id="list-empty" hidden>Nothing here.</p>
@@ -202,6 +206,16 @@
         <div><dt>Face ID lock</dt><dd id="s-lock"></dd></div>
       </dl>
       <p class="mono hint" id="s-lock-note"></p>
+      <dl class="facts mono"><div><dt>Publish key</dt><dd id="s-pub"></dd></div></dl>
+      <p class="mono hint" id="s-pub-note">A second key, only for <strong>Publish now</strong>. On GitHub create a fine-grained key:
+        <em>Only select repositories</em> → <span id="s-site-repo">the site repository</span>; <em>Permissions</em> → <em>Actions: Read and write</em>, nothing else.
+        It can start builds but can't change code or photo data, so “No expiration” is fine.
+        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create it on GitHub ↗</a></p>
+      <form class="inline" id="s-pub-form" autocomplete="off" novalidate>
+        <input id="s-pub-in" type="password" placeholder="github_pat_… (publish key)" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Publish key">
+        <button type="submit" class="btn small" id="s-pub-save">Save</button>
+      </form>
+      <button type="button" class="btn ghost small" id="s-pub-del" hidden>Remove publish key</button>
       <p class="err mono" id="s-err" role="alert"></p>
       <div class="actions wrap">
         <button type="button" class="btn ghost" id="s-lock-btn"></button>

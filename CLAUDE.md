@@ -38,7 +38,10 @@ owner's iCloud shared album, processes them, and builds a static site into
 - **Photo titles and order are set in the editor app** (`site/edit/`, owner's
   phone; the old `#edit` mode was removed). It uses a fine-grained GitHub key
   (Face ID-locked, encrypted where the device supports it) scoped to the **data repo**
-  `towbinaj/AlexTowbinPhotographyData` only. Saves write `curation.json`
+  `towbinaj/AlexTowbinPhotographyData` only. A **second, optional publish key**
+  (site repo only, Actions: read and write) powers the app's *Publish now*
+  (workflow_dispatch); keys can't have per-repo permissions, so never merge
+  the two. Saves write `curation.json`
   (`{titles, order, collections, highlights, tags, photo_tags, locations}`) there via the GitHub API; the page reads it live from
   raw.githubusercontent.com and the build bakes it in (CI checks it out into
   `data/`). Treat it as untrusted input (validate, render as text only). Unplaced (new) photos sort first. Titles are optional: untitled photos show the date. Apple

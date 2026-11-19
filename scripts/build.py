@@ -937,7 +937,10 @@ def build(photos: list[Photo], config: dict) -> None:
         if e["id"] in og_sizes and not e.get("draft"):
             e["page"] = True  # has a share page at p/<id>/
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
-    cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,
+    now = datetime.now(timezone.utc)
+    site_repo = os.environ.get("GITHUB_REPOSITORY", "")
+    cfg = dict(config, built=now.strftime("%Y-%m-%d"), built_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"), rights=r,
+               site_repo=site_repo if DATA_REPO_RE.fullmatch(site_repo) else "",  # for the editor's Publish now
                collections=load_collections(known={e["id"] for e in entries}),
                highlights=load_highlights(known={e["id"] for e in entries}),
                **data_settings(config))

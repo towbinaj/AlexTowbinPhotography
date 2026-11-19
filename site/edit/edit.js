@@ -14,6 +14,17 @@
   };
   const mem = {};
   const getKey = () => store.get(KEY) || mem.key || "";
+  // Second key, only for "Publish now" (site repo, Actions: read and write).
+  // With the Face ID lock (prf) both keys are sealed together as one bundle.
+  const PUB = "at-pub-key";
+  const getPub = () => store.get(PUB) || mem.pub || "";
+  const bundle = (k = getKey(), p = getPub()) => (p ? JSON.stringify({ k, p }) : k);
+  function applyBundle(sealed) {
+    if (!sealed) return;
+    let o = null;
+    if (sealed[0] === "{") { try { o = JSON.parse(sealed); } catch { o = null; } }
+    if (o && typeof o.k === "string") { mem.key = o.k; mem.pub = typeof o.p === "string" ? o.p : ""; } else mem.key = sealed;
+  }
 
   let repo = "", all = [], doc = M.normalize({}, clean), sha;
   let filter = "all", shown = [], current = -1;
@@ -464,6 +475,76 @@
   })();
   window.__picker = picker;
 
+  // ---------------- publish now ----------------
+  // Starts the site build (GitHub Actions workflow_dispatch) with the publish
+  // key, then follows it until it's done and reloads the photo list, so new
+  // album photos show up without waiting for GitHub's (unreliable) schedule.
+  let siteRepo = "", builtAt = "", pubTimer = 0, pubBusy = false, dispatchedAt = 0;
+  const ghPub = (path, opts = {}, k = getPub()) => fetch(`https://api.github.com/repos/${siteRepo}${path}`, {
+    ...opts, cache: "no-store",
+    headers: { Authorization: `Bearer ${k}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) },
+  });
+  function ago(iso) {
+    const t = Date.parse(iso);
+    if (!Number.isFinite(t)) return "";
+    const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+    return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 48 * 60 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+  }
+  function pubSay(msg, err) { $("pub-status").textContent = msg; $("pubbar").classList.toggle("err", !!err); }
+  function pubIdle() { pubSay(builtAt ? `Site updated ${ago(builtAt)}` : ""); $("pub-now").disabled = false; }
+  async function refreshPhotos() {
+    try {
+      const [cfg, list] = await Promise.all([
+        fetch("../config.json", { cache: "no-store" }).then((r) => r.json()),
+        fetch("../photos.json", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      const before = all.length;
+      all = Array.isArray(list) ? list.filter((p) => p && typeof p.id === "string" && Array.isArray(p.src) && p.src.length) : all;
+      builtAt = typeof cfg.built_at === "string" ? cfg.built_at : builtAt;
+      if (!$("list").hidden) renderList();
+      const n = all.length - before;
+      pubSay(n > 0 ? `Published · ${n} new photo${n === 1 ? "" : "s"} (see Hidden)` : "Published · site is up to date");
+    } catch { pubSay("Published. Reopen the app to see new photos."); }
+  }
+  async function pubPoll() {
+    clearTimeout(pubTimer);
+    if (!siteRepo || !getPub()) { pubIdle(); return; }
+    try {
+      const r = await ghPub("/actions/workflows/deploy.yml/runs?per_page=1");
+      if (!r.ok) throw new Error(String(r.status));
+      const run = ((await r.json()).workflow_runs || [])[0];
+      const isOld = run && dispatchedAt && Date.parse(run.created_at) < dispatchedAt - 15000;
+      if (run && run.status !== "completed") {
+        pubBusy = true; $("pub-now").disabled = true;
+        pubSay(`Publishing… started ${ago(run.run_started_at || run.created_at)} (about 5 min)`);
+        pubTimer = setTimeout(pubPoll, 15000);
+      } else if (pubBusy && isOld && Date.now() - dispatchedAt < 120000) {
+        pubTimer = setTimeout(pubPoll, 8000); // our run hasn't appeared yet
+      } else if (pubBusy) {
+        pubBusy = false; dispatchedAt = 0; $("pub-now").disabled = false;
+        if (run && run.conclusion === "success") await refreshPhotos();
+        else pubSay(`Publishing didn't finish (${(run && run.conclusion) || "unknown"}). Try again, or look at Actions on GitHub.`, true);
+      } else pubIdle();
+    } catch { pubBusy = false; pubIdle(); }
+  }
+  $("pub-now").addEventListener("click", async () => {
+    if (!getPub()) {
+      $("open-settings").click();
+      fillPubSettings("Add a publish key first (below).", true);
+      $("s-pub-in").focus();
+      return;
+    }
+    $("pub-now").disabled = true; pubSay("Starting…");
+    try {
+      const r = await ghPub("/actions/workflows/deploy.yml/dispatches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ref: "main" }) });
+      if (r.status === 204) { pubBusy = true; dispatchedAt = Date.now(); pubSay("Publishing… about 5 min"); pubTimer = setTimeout(pubPoll, 8000); return; }
+      pubSay(r.status === 401 ? "GitHub didn't accept the publish key. Replace it under Key." :
+        r.status === 403 || r.status === 404 ? "The publish key can't start builds. It needs Actions: read and write on the site repository." :
+        `GitHub error ${r.status}. Try again.`, true);
+    } catch { pubSay("Couldn't reach GitHub. Check your connection.", true); }
+    $("pub-now").disabled = false;
+  });
+
   // ---------------- select several: bulk tags / collection / location ----------------
   let selecting = false;
   const selected = new Set();
@@ -678,8 +759,8 @@
     const wasLocked = L.enabled(), oldLock = wasLocked ? localStorage.getItem("at-lock") : null;
     const newLock = !wasLocked && lockAvailable && $("setup-faceid").checked;
     try {
-      if (wasLocked && L.mode() === "prf") { err.textContent = "Confirm with Face ID…"; await L.rekey(k); }
-      else if (newLock) { err.textContent = "Set up Face ID…"; await L.enable(k); }
+      if (wasLocked && L.mode() === "prf") { err.textContent = "Confirm with Face ID…"; await L.rekey(bundle(k)); }
+      else if (newLock) { err.textContent = "Set up Face ID…"; await L.enable(bundle(k)); }
     } catch (e2) {
       err.textContent = `Face ID didn't finish (${e2.name === "NotAllowedError" ? "cancelled" : e2.message || e2.name}). Try again${newLock ? ", or untick “Lock the editor with Face ID”" : ""}.`;
       return;
@@ -693,7 +774,7 @@
       if (!j.permissions || !j.permissions.push) { undo(); err.textContent = "That key can read but not save. It needs Contents: read and write."; return; }
     } catch { undo(); err.textContent = "Couldn't reach GitHub. Check your connection and try again."; return; }
     mem.exp = exp; store.set(EXP, exp);
-    if (L.mode() === "prf") store.del(KEY); else store.set(KEY, k); // prf: only the encrypted copy stays on the device
+    if (L.mode() === "prf") { store.del(KEY); store.del(PUB); } else store.set(KEY, k); // prf: only the encrypted copy stays on the device
     mem.key = k;
     await loadDoc();
   });
@@ -707,10 +788,48 @@
     $("s-lock-btn").hidden = !mode && !lockAvailable;
     $("s-err").textContent = "";
   }
+  function fillPubSettings(msg, isErr) {
+    const has = !!getPub();
+    $("s-pub").textContent = !siteRepo ? "Published site only" : has ? "Set" : "Not set";
+    $("s-site-repo").textContent = siteRepo || "the site repository";
+    $("s-pub-form").hidden = !siteRepo;
+    $("s-pub-in").placeholder = has ? "Paste a new publish key to replace it" : "github_pat_… (publish key)";
+    $("s-pub-del").hidden = !has;
+    if (msg !== undefined) { $("s-err").textContent = msg; $("s-err").classList.toggle("ok", !isErr); }
+  }
+  $("s-pub-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const p = $("s-pub-in").value.trim();
+    if (!p) { fillPubSettings("Paste the publish key first.", true); return; }
+    // Face ID first (Safari needs it right after the tap); undone if the key fails.
+    const oldLock = L.enabled() ? localStorage.getItem("at-lock") : null;
+    try { if (L.mode() === "prf") { fillPubSettings("Confirm with Face ID…"); await L.rekey(bundle(getKey(), p)); } }
+    catch (e2) { fillPubSettings(`Face ID didn't finish (${e2.name === "NotAllowedError" ? "cancelled" : e2.message || e2.name}).`, true); return; }
+    const undo = () => { if (oldLock) localStorage.setItem("at-lock", oldLock); };
+    fillPubSettings("Checking…");
+    try {
+      const r = await ghPub("/actions/workflows/deploy.yml", {}, p);
+      if (!r.ok) { undo(); fillPubSettings(r.status === 401 ? "GitHub didn't accept that key." : "That key can't see the site's builds. It needs Actions: read and write on " + siteRepo + ".", true); return; }
+    } catch { undo(); fillPubSettings("Couldn't reach GitHub. Check your connection and try again.", true); return; }
+    mem.pub = p;
+    if (L.mode() !== "prf") store.set(PUB, p);
+    $("s-pub-in").value = "";
+    fillPubSettings("Publish key saved.");
+    pubPoll();
+  });
+  $("s-pub-del").addEventListener("click", async () => {
+    if (!confirm("Remove the publish key from this device?")) return;
+    if (L.mode() === "prf") {
+      try { await L.rekey(bundle(getKey(), "")); } catch (e2) { fillPubSettings(`Face ID didn't finish (${e2.message || e2.name}).`, true); return; }
+    }
+    store.del(PUB); mem.pub = "";
+    fillPubSettings("Publish key removed.");
+  });
   $("open-settings").addEventListener("click", () => {
     $("s-repo").textContent = repo;
     $("s-exp").textContent = expiryInfo().text;
     fillLockSettings();
+    fillPubSettings("");
     show("settings");
   });
   $("s-lock-btn").addEventListener("click", async () => {
@@ -718,11 +837,11 @@
     if (!k) return;
     if (L.enabled()) {
       if (!confirm("Turn off the Face ID lock? Your key stays on this device, unencrypted.")) return;
-      store.set(KEY, k); L.disable();
+      store.set(KEY, k); if (getPub()) store.set(PUB, getPub()); L.disable();
     } else {
       try {
         $("s-err").textContent = "Set up Face ID…";
-        if (await L.enable(k) === "prf") store.del(KEY);
+        if (await L.enable(bundle()) === "prf") { store.del(KEY); store.del(PUB); }
       } catch (e) { fillLockSettings(); $("s-err").textContent = `Face ID wasn't set up (${e.message || e.name}).`; return; }
     }
     fillLockSettings();
@@ -731,7 +850,7 @@
   $("s-replace").addEventListener("click", () => openSetup(true));
   $("s-forget").addEventListener("click", () => {
     if (!confirm("Forget the key on this device? You'll need to paste it again to edit.")) return;
-    store.del(KEY); store.del(EXP); mem.key = mem.exp = ""; L.disable();
+    store.del(KEY); store.del(EXP); store.del(PUB); mem.key = mem.exp = mem.pub = ""; L.disable();
     openSetup(false);
   });
 
@@ -741,7 +860,7 @@
   let lockAvailable = false, locked = false, hiddenAt = 0;
   function showLock() {
     locked = true;
-    if (L.mode() === "prf") mem.key = ""; // the decrypted key only lives in memory while unlocked
+    if (L.mode() === "prf") mem.key = mem.pub = ""; // decrypted keys only live in memory while unlocked
     $("lock-err").textContent = "";
     show("lock");
     $("lock-open").focus();
@@ -750,8 +869,7 @@
     $("lock-err").textContent = "";
     $("lock-open").disabled = true;
     try {
-      const k = await L.unlock();
-      if (k) mem.key = k;
+      applyBundle(await L.unlock());
       if (!getKey()) throw new Error("No key on this device. Use the link below to connect again.");
       locked = false;
       if (doc && sha !== undefined && all.length) route(); else await loadDoc();
@@ -761,7 +879,7 @@
   });
   $("lock-reset").addEventListener("click", () => {
     if (!confirm("Forget the key and the Face ID lock on this device? You'll paste the key again to edit.")) return;
-    L.disable(); store.del(KEY); mem.key = ""; locked = false;
+    L.disable(); store.del(KEY); store.del(PUB); mem.key = mem.pub = ""; locked = false;
     openSetup(false);
   });
   document.addEventListener("visibilitychange", () => {
@@ -803,6 +921,7 @@
     try {
       ({ doc, sha } = await readDoc());
       route();
+      pubPoll(); // show "Site updated …" or a build in progress
     } catch (err) {
       if (err.status === 401 || err.status === 403 || err.status === 404) { openSetup(false); $("setup-err").textContent = err.message; }
       else { $("boot").textContent = (err.message || "Couldn't reach GitHub.") + " Tap to retry."; $("boot").onclick = () => { $("boot").onclick = null; loadDoc(); }; }
@@ -814,6 +933,9 @@
     fetch("../photos.json", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
   ]).then(([cfg, list]) => {
     repo = typeof cfg.data_repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(cfg.data_repo) ? cfg.data_repo : "";
+    siteRepo = typeof cfg.site_repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(cfg.site_repo) ? cfg.site_repo : "";
+    builtAt = typeof cfg.built_at === "string" ? cfg.built_at : "";
+    $("pubbar").hidden = !siteRepo;
     all = Array.isArray(list) ? list.filter((p) => p && typeof p.id === "string" && Array.isArray(p.src) && p.src.length) : [];
     $("setup-repo").textContent = repo || "the photo data repository";
     if (!repo) { $("boot").textContent = "The editor works on the published site only."; return; }

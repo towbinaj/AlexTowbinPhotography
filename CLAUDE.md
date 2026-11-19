@@ -89,14 +89,14 @@ desktop (1440×900) and phone (`devices['iPhone 13']`) sizes. Look for page
 errors, horizontal overflow, and the lightbox flow. Keep these scripts in the
 scratchpad, not the repo.
 
-## The build schedule belongs to the owner
-GitHub only runs the `schedule:` trigger if the person who last edited the
-cron line is a real user. Edits pushed through the Claude GitHub connection
-silently disable it (it never ran until the owner re-saved the file,
-2026-11-18). **If you change `.github/workflows/deploy.yml`, ask the owner to
-make a trivial edit to the cron line's comment on github.com afterwards**,
-then confirm a `schedule` run appears. Avoid workflow edits when another file
-can do the job.
+## The build schedule is best effort
+GitHub runs the hourly `schedule:` trigger only when it has capacity and
+skips many slots (sometimes all of them for hours), with no notice. Every
+build that runs succeeds; there's nothing to fix in the workflow. The owner's
+reliable path is **Publish now** in the editor app (workflow_dispatch).
+An earlier theory that edits pushed through the Claude connection disable
+the schedule turned out wrong: a scheduled run fired after a Claude edit on
+2026-11-19 with no owner re-save. Owner re-saves are harmless but not needed.
 
 ## Conventions
 - Engine logic gets offline tests. Never hit the network in tests.

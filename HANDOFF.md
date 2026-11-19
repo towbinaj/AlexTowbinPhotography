@@ -223,6 +223,10 @@ format, still read). The hourly cron stays as a backup.
 restore/save v6, configure-pages v6, upload-pages-artifact v5, deploy-pages v5
 (all Node 24; inputs we use unchanged). After merging, the owner must re-save the
 cron comment on github.com (see CLAUDE.md).
+**Correction (2026-11-19):** the "Claude edits disable the schedule" theory
+was wrong. Scheduled run #81 fired at 17:24 UTC after a Claude edit to
+deploy.yml with no owner re-save. GitHub just skips many scheduled slots.
+Publish now is the dependable path; CLAUDE.md updated.
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

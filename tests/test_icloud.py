@@ -631,3 +631,40 @@ def test_model_bulk_highlight_on_and_off():
     """
     on, off, msg, orig = _node_model(script)
     assert on == ["a", "b", "c"] and off == ["b"] and msg == "2 photos: highlighted" and orig == ["a"]
+
+
+# ---- processed-image cache ----
+
+def test_render_cache_hit_skips_the_original(tmp_path):
+    src = tmp_path / "orig.jpg"
+    framed(400, 300, 10).save(src)
+    cache, out1, out2 = tmp_path / "cache", tmp_path / "out1", tmp_path / "out2"
+    for o in (out1, out2):
+        (o / "img").mkdir(parents=True)
+    config = {"name": "Test Person", "copyright_start_year": 2026}
+    meta = build.rights_metadata(build.rights(config))
+    key = build.render_key(config)
+    p = build.Photo(id="abc123", source=src, caption="", taken="2026-01-01T00:00:00Z", added="2026-02-01T00:00:00Z")
+    first = build.render_cached(p, key, False, meta, out1, cache)
+    assert first and first["_og"] == (400, 300) and (out1 / "img" / "abc123-og.jpg").is_file()
+    assert build.cached_entry("abc123", key, cache) is not None
+    # Second build: no original at all, served from the cache.
+    p2 = build.Photo(id="abc123", source=None, caption="Later Title", taken=p.taken, added=p.added)
+    second = build.render_cached(p2, key, False, meta, out2, cache)
+    assert second["caption"] == "Later Title" and second["src"] == first["src"] and second["lqip"] == first["lqip"]
+    assert sorted(f.name for f in (out2 / "img").iterdir()) == sorted(f.name for f in (out1 / "img").iterdir())
+    # Different settings (e.g. a new copyright holder or year) -> cache miss.
+    other = build.render_key({"name": "Someone Else", "copyright_start_year": 2026})
+    assert other != key and build.cached_entry("abc123", other, cache) is None
+    assert build.render_cached(p2, other, False, meta, out2, cache) is None  # needs the original again
+    # A missing file also counts as a miss.
+    (cache / "abc123" / first["src"][0]["url"]).unlink()
+    assert build.cached_entry("abc123", key, cache) is None
+
+
+def test_render_key_tracks_image_settings(monkeypatch):
+    base = build.render_key({"name": "A"})
+    assert build.render_key({"name": "A"}) == base
+    assert build.render_key({"name": "A", "trim_white_borders": True}) != base
+    monkeypatch.setattr(build, "SIZES", [480, 960])
+    assert build.render_key({"name": "A"}) != base

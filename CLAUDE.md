@@ -22,7 +22,8 @@ owner's iCloud shared album, processes them, and builds a static site into
   (`_owner`, `SharedCollection-TEST`, `example.org`).
 - Secret-scan every diff before committing, e.g.
   `git diff --cached | grep -nE "icloud.com/shared/album/0|@hotmail|@gmail|SharedCollection-[0-9A-F]"`.
-- `.cache/` (downloaded originals) and `_site/` are git-ignored; keep it that way.
+- `.cache/` (originals during a build, processed images in `.cache/rendered/`)
+  and `_site/` are git-ignored; keep it that way.
 
 ## Owner preferences (decided — don't relitigate)
 - **White photo borders stay.** They're part of the art.

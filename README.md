@@ -26,8 +26,11 @@ If iCloud is unreachable or returns an empty album, the build fails and the
 site keeps showing the last good version (the same if the `ICLOUD_ALBUM`
 secret is ever missing on GitHub). GitHub emails you about failed runs
 (with hourly builds, an iCloud outage can mean one email per hour until it's
-back). Downloaded originals are cached between runs; a new cache copy is saved
-only when the set of photos changes.
+back). Each photo's processed web images are cached between runs (about 1.7 MB a
+photo, in `.cache/rendered/`), so a build only downloads and processes **new**
+photos and takes about the same time however large the album grows. The
+cache refreshes itself when image settings or the copyright notice change
+(e.g. a new year), and a new copy is saved only when something changed.
 
 ## One-time setup
 1. **Album link:** in Photos, open the shared album → Manage Shared Album →

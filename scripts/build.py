@@ -276,7 +276,9 @@ def fetch_sharedstream_album(token: str, session: requests.Session | None = None
 # Download (with cache) + other sources
 # --------------------------------------------------------------------------
 
-def download_album(token: str) -> list[Photo]:
+def download_album(token: str, skip=None) -> list[Photo]:
+    """skip(pid) -> True when the photo's processed images are already cached,
+    so its (large) original doesn't need downloading."""
     if token[:1].isdigit():
         name, items = fetch_cloudkit_album(token)
     else:
@@ -296,6 +298,9 @@ def download_album(token: str) -> list[Photo]:
     for it in items:
         pid = hashlib.sha1(it["checksum"].encode()).hexdigest()[:12]
         dest = CACHE / f"{pid}.img"
+        if skip and skip(pid) and not dest.exists():
+            photos.append(Photo(id=pid, source=None, caption=it["caption"], taken=it["taken"], added=it["added"]))
+            continue
         if not dest.exists():
             for attempt in range(3):
                 try:
@@ -315,7 +320,7 @@ def download_album(token: str) -> list[Photo]:
                 continue
         photos.append(Photo(id=pid, source=dest, caption=it["caption"], taken=it["taken"], added=it["added"]))
 
-    keep = {p.source.name for p in photos}
+    keep = {p.source.name for p in photos if p.source}
     for f in CACHE.glob("*.img"):
         if f.name not in keep:
             f.unlink()
@@ -890,7 +895,72 @@ def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_
     return out
 
 
-def build(photos: list[Photo], config: dict) -> None:
+# ---- processed-image cache ----
+# Each photo's finished images (all WebP sizes + its link-preview JPEG) and
+# details are kept in .cache/rendered/<id>/ between builds (CI caches that
+# folder), so only new photos are downloaded and processed. A key over the
+# image settings and the rights metadata invalidates everything when either
+# changes (e.g. a new copyright year).
+RENDER_CACHE = ROOT / ".cache" / "rendered"
+RENDER_VERSION = 1  # bump to force re-processing after changing render_images()
+
+
+def render_key(config: dict) -> str:
+    exif, xmp = rights_metadata(rights(config))
+    blob = json.dumps({"v": RENDER_VERSION, "sizes": SIZES, "q": WEBP_QUALITY, "og": OG_EDGE,
+                       "trim": bool(config.get("trim_white_borders", False)),
+                       "exif": hashlib.sha256(exif).hexdigest(), "xmp": hashlib.sha256(xmp).hexdigest()})
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def cached_entry(pid: str, key: str, cache: Path = RENDER_CACHE) -> dict | None:
+    """The cached render of a photo if it matches `key` and its files are all there."""
+    if not _SAFE_ID.fullmatch(pid):
+        return None
+    d = cache / pid
+    data = _read_json(d / "entry.json")
+    if not isinstance(data, dict) or data.get("key") != key:
+        return None
+    files = [x["url"] for x in data.get("src", [])] + [f"img/{pid}-og.jpg"]
+    if not data.get("src") or not all((d / f).is_file() for f in files):
+        return None
+    return data
+
+
+def render_cached(photo: Photo, key: str, trim: bool, meta, out: Path, cache: Path = RENDER_CACHE) -> dict | None:
+    """Photo entry for photos.json, with its images copied into out/img/. Uses
+    the cache when possible; otherwise processes the original and caches it."""
+    data = cached_entry(photo.id, key, cache)
+    if data is None:
+        if photo.source is None or not _SAFE_ID.fullmatch(photo.id):
+            return None
+        d = cache / photo.id
+        shutil.rmtree(d, ignore_errors=True)
+        (d / "img").mkdir(parents=True)
+        e = render_images(photo, d, trim=trim, meta=meta)
+        if not e:
+            shutil.rmtree(d, ignore_errors=True)
+            return None
+        im = e.pop("_im")
+        og = im.copy()
+        og.thumbnail((OG_EDGE, OG_EDGE))
+        og.save(d / "img" / f"{photo.id}-og.jpg", "JPEG", quality=82,
+                **({"exif": meta[0], "xmp": meta[1]} if meta else {}))
+        data = {"key": key, "w": e["w"], "h": e["h"], "lqip": e["lqip"], "src": e["src"],
+                "located": e["located"], "og": list(og.size)}
+        (d / "entry.json").write_text(json.dumps(data))
+    for f in (cache / photo.id / "img").iterdir():
+        target = out / "img" / f.name
+        try:
+            os.link(f, target)          # same disk: instant, no extra space
+        except OSError:
+            shutil.copy2(f, target)
+    return {"id": photo.id, "w": data["w"], "h": data["h"], "caption": photo.caption,
+            "taken": photo.taken, "added": photo.added, "lqip": data["lqip"], "src": data["src"],
+            "located": data["located"], "_og": tuple(data["og"])}
+
+
+def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
     if OUT.exists():
         shutil.rmtree(OUT)
     shutil.copytree(SITE_SRC, OUT)
@@ -906,22 +976,29 @@ def build(photos: list[Photo], config: dict) -> None:
     entries = []
     og_written = False
     vis = visibility()
+    trim = config.get("trim_white_borders", False)
+    key = render_key(config)
+    cache = RENDER_CACHE if use_cache else OUT.parent / ".cache" / f"rendered-tmp-{os.getpid()}"
     for p in photos:
-        e = render_images(p, OUT, trim=config.get("trim_white_borders", False), meta=meta)
+        e = render_cached(p, key, trim, meta, OUT, cache)
         if not e:
+            print(f"  skipping {p.id}: not processed", file=sys.stderr)
             continue
-        im = e.pop("_im")
         if is_shown(p.id, p.added, vis) and _SAFE_ID.fullmatch(p.id):
-            # Link-preview image (JPEG for widest support): one per shown photo
-            # for its share page; the first one is also the site's preview.
-            og = im.copy()
-            og.thumbnail((OG_EDGE, OG_EDGE))
-            og.save(OUT / "img" / f"{p.id}-og.jpg", "JPEG", quality=82, exif=meta[0], xmp=meta[1])
-            e["_og"] = og.size
+            # The first shown photo's link-preview image is also the site's.
             if not og_written:
-                og.save(OUT / "img" / "og.jpg", "JPEG", quality=82, exif=meta[0], xmp=meta[1])
+                shutil.copy2(OUT / "img" / f"{p.id}-og.jpg", OUT / "img" / "og.jpg")
                 og_written = True
+        else:
+            e.pop("_og", None)  # hidden: no share page
         entries.append(e)
+    if use_cache:  # drop cached renders of photos no longer in the album
+        current = {p.id for p in photos}
+        for d in RENDER_CACHE.iterdir() if RENDER_CACHE.is_dir() else []:
+            if d.is_dir() and d.name not in current:
+                shutil.rmtree(d, ignore_errors=True)
+    else:
+        shutil.rmtree(cache, ignore_errors=True)
 
     apply_titles(entries, titles)
     apply_meta(entries, *load_meta())
@@ -988,10 +1065,11 @@ def main() -> int:
     album = os.environ.get("ICLOUD_ALBUM") or os.environ.get("ICLOUD_ALBUM_TOKEN") or ""
     token = parse_album(album) if album.strip() else ""
 
+    key = render_key(config)
     if args.demo:
         photos = demo_photos(args.demo)
     elif token:
-        photos = download_album(token)
+        photos = download_album(token, skip=lambda pid: cached_entry(pid, key) is not None)
         if not photos:
             # Fail loudly rather than publish an empty site over a good one.
             print("iCloud returned no photos; refusing to deploy an empty gallery.", file=sys.stderr)
@@ -1005,7 +1083,7 @@ def main() -> int:
         photos = local_photos()
         print(f"No ICLOUD_ALBUM set; using {len(photos)} photos from photos/")
 
-    build(photos, config)
+    build(photos, config, use_cache=not args.demo)  # demo images are throwaway: don't cache them
     return 0
 
 

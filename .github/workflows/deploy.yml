@@ -40,10 +40,19 @@ jobs:
 
       - run: python -m pytest -q tests
 
-      # Keep downloaded originals between runs so only new photos are fetched.
-      # Restore the newest copy; save a new one only when the set of photos
-      # changed (hourly runs would otherwise store a ~0.5 GB copy every hour).
-      - id: originals
+      # Keep each photo's processed web images between runs (~1.7 MB a photo),
+      # so only new photos are downloaded and processed. Restore the newest
+      # copy; save a new one only when something changed.
+      - id: rendered
+        uses: actions/cache/restore@v6
+        with:
+          path: .cache/rendered
+          key: rendered-
+          restore-keys: rendered-
+
+      # One-time bridge: before the first processed cache exists, reuse the
+      # old cache of originals so the first build doesn't re-download them.
+      - if: steps.rendered.outputs.cache-matched-key == ''
         uses: actions/cache/restore@v6
         with:
           path: .cache/originals
@@ -59,14 +68,14 @@ jobs:
           SITE_URL: ${{ steps.pages.outputs.base_url }}
         run: python scripts/build.py
 
-      - id: originals-key
-        run: echo "key=originals-$(ls .cache/originals 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - id: rendered-key
+        run: echo "key=rendered-$(cat .cache/rendered/*/entry.json 2>/dev/null | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
-      - if: steps.originals.outputs.cache-matched-key != steps.originals-key.outputs.key
+      - if: steps.rendered.outputs.cache-matched-key != steps.rendered-key.outputs.key
         uses: actions/cache/save@v6
         with:
-          path: .cache/originals
-          key: ${{ steps.originals-key.outputs.key }}
+          path: .cache/rendered
+          key: ${{ steps.rendered-key.outputs.key }}
 
       - uses: actions/upload-pages-artifact@v5
         with:

@@ -227,6 +227,18 @@ cron comment on github.com (see CLAUDE.md).
 was wrong. Scheduled run #81 fired at 17:24 UTC after a Claude edit to
 deploy.yml with no owner re-save. GitHub just skips many scheduled slots.
 Publish now is the dependable path; CLAUDE.md updated.
+**Processed-image cache (2026-11-19, branch):** builds had grown from ~2 to
+~7 min because every run re-rendered every photo. Now `.cache/rendered/<id>/`
+holds each photo's WebPs, og JPEG and `entry.json` (keyed by `render_key()`:
+sizes, quality, og edge, trim, rights-metadata hashes, `RENDER_VERSION`);
+cached photos skip the download entirely (`download_album(skip=…)`), stale
+dirs are pruned. CI caches `.cache/rendered` instead of originals (~1.7 MB vs
+~14 MB a photo; the 10 GB Actions cache now fits ~5,800 photos); a one-time
+bridge restores the old originals cache when no rendered cache exists.
+Storage plan agreed with the owner: stay on GitHub Pages (1 GB ≈ 550
+photos); near ~500 photos, drop the 3200 px size or move images to
+Cloudflare R2. Owner asked about Google Drive/Dropbox: not suitable
+(throttled links, expiring OAuth tokens).
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

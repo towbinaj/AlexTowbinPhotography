@@ -20,18 +20,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Photo titles + order (curation.json) live in a separate public repo,
       # written by the site's editor. Baked in here for JSON-LD / search; the
       # page also reads it live.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: towbinaj/AlexTowbinPhotographyData
           path: data
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -44,14 +44,14 @@ jobs:
       # Restore the newest copy; save a new one only when the set of photos
       # changed (hourly runs would otherwise store a ~0.5 GB copy every hour).
       - id: originals
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .cache/originals
           key: originals-
           restore-keys: originals-
 
       - id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Build
         env:
@@ -63,12 +63,12 @@ jobs:
         run: echo "key=originals-$(ls .cache/originals 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - if: steps.originals.outputs.cache-matched-key != steps.originals-key.outputs.key
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .cache/originals
           key: ${{ steps.originals-key.outputs.key }}
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
@@ -80,4 +80,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

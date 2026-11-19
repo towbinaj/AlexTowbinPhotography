@@ -219,6 +219,10 @@ GitHub documents schedules as best effort and drops runs under load. Fix:
 config.json gains `site_repo` (from GITHUB_REPOSITORY) and `built_at`. The
 Face ID lock seals `{"k": dataKey, "p": publishKey}` (plain string = old
 format, still read). The hourly cron stays as a backup.
+**Actions bumped (2026-11-19):** checkout v7, setup-python v7, cache
+restore/save v6, configure-pages v6, upload-pages-artifact v5, deploy-pages v5
+(all Node 24; inputs we use unchanged). After merging, the owner re-saved the
+cron comment on github.com (see CLAUDE.md).
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

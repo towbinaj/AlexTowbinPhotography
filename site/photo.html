@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- One page per shown photo (built by scripts/build.py), so a shared link
+       previews that photo. No scripts: link previewers see exactly this. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{PAGE_TITLE}}</title>
+  <meta name="description" content="{{DESCRIPTION}}">
+  <meta name="theme-color" content="#0b0b0a">
+  <meta name="author" content="{{AUTHOR}}">
+  <meta name="copyright" content="{{COPYRIGHT}}">
+  <meta name="robots" content="index, follow, noai, noimageai">
+  <link rel="canonical" href="{{PAGE_URL}}">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="{{SITE_NAME}}">
+  <meta property="og:title" content="{{PAGE_TITLE}}">
+  <meta property="og:description" content="{{DESCRIPTION}}">
+  <meta property="og:url" content="{{PAGE_URL}}">
+  <meta property="og:image" content="{{OG_IMAGE}}">
+  <meta property="og:image:width" content="{{OG_W}}">
+  <meta property="og:image:height" content="{{OG_H}}">
+  <meta property="og:image:alt" content="{{ALT}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../../favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300..600&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="../../photo.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="name" href="../../">{{SITE_NAME_SHORT}}</a>
+    <a class="all mono" href="{{GALLERY_URL}}">View in the gallery →</a>
+  </header>
+  <main>
+    <figure class="print">
+      <img src="{{IMG_SRC}}" srcset="{{IMG_SRCSET}}" sizes="(max-width: 900px) 100vw, 80vw" width="{{W}}" height="{{H}}" alt="{{ALT}}" draggable="false">
+    </figure>
+    <div class="caption">
+      <h1>{{HEADING}}</h1>
+      <p class="mono">{{SUBLINE}}</p>
+    </div>
+  </main>
+  <footer class="mono">{{COPYRIGHT}}</footer>
+</body>
+</html>

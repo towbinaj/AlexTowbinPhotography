@@ -832,6 +832,64 @@ def data_settings(config: dict) -> dict:
             "data_url": f"https://raw.githubusercontent.com/{repo}/main/curation.json"}
 
 
+# ---- versioned assets + single-photo share pages ----
+_SAFE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_LOCAL_ASSET = re.compile(r'((?:href|src)=")((?!https?:|//|#|data:)[^"?]+\.(?:css|js))(")')
+OG_EDGE = 1200
+
+
+def site_version(src: Path = SITE_SRC) -> str:
+    """Short hash of the front-end files: changes whenever any of them does."""
+    h = hashlib.sha256()
+    for f in sorted(x for x in src.rglob("*") if x.is_file()):
+        h.update(f.relative_to(src).as_posix().encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()[:10]
+
+
+def stamp_assets(page: str, version: str) -> str:
+    """app.js -> app.js?v=<version> (local .js/.css only), so browsers never
+    mix a new page with old cached scripts or styles."""
+    return _LOCAL_ASSET.sub(lambda m: f"{m.group(1)}{m.group(2)}?v={version}{m.group(3)}", page)
+
+
+def _month_year(iso: str) -> str:
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).strftime("%b %Y")
+    except (ValueError, AttributeError):
+        return ""
+
+
+def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_size: tuple[int, int]) -> str:
+    """HTML for p/<id>/: the photo, its title, place and date, and link-preview
+    tags pointing at its own image. Everything from curation is escaped."""
+    pid = e["id"]
+    name = config.get("name") or config.get("title", "Photography")
+    site_name = config.get("title") or name
+    title = e.get("caption") or ""
+    when = _month_year(e.get("taken", ""))
+    place = place_label(e.get("place"))
+    subline = " · ".join(x for x in (place, when) if x)
+    page_title = f"{title} — {name}" if title else f"{name}{' — ' + when if when else ''}"
+    base = site_url + "/" if site_url else "../../"
+    page_url = f"{site_url}/p/{pid}/" if site_url else "./"
+    srcs = e["src"]
+    mid = srcs[min(2, len(srcs) - 1)]
+    vals = {
+        "PAGE_TITLE": page_title, "DESCRIPTION": " · ".join(x for x in (subline, r["notice"]) if x),
+        "AUTHOR": r["holder"], "COPYRIGHT": r["notice"], "SITE_NAME": site_name, "SITE_NAME_SHORT": name,
+        "PAGE_URL": page_url, "OG_IMAGE": f"{base}img/{pid}-og.jpg", "OG_W": str(og_size[0]), "OG_H": str(og_size[1]),
+        "ALT": title or f"Photograph by {r['holder']}", "HEADING": title or (when or "Untitled"),
+        "SUBLINE": subline if title else place, "GALLERY_URL": f"../../#photo-{pid}",
+        "IMG_SRC": "../../" + mid["url"], "IMG_SRCSET": ", ".join(f"../../{x['url']} {x['w']}w" for x in srcs),
+        "W": str(e["w"]), "H": str(e["h"]),
+    }
+    out = template
+    for k, v in vals.items():
+        out = out.replace("{{" + k + "}}", html.escape(v, quote=True))
+    return out
+
+
 def build(photos: list[Photo], config: dict) -> None:
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -853,11 +911,16 @@ def build(photos: list[Photo], config: dict) -> None:
         if not e:
             continue
         im = e.pop("_im")
-        if not og_written and is_shown(p.id, p.added, vis):  # social preview: a shown photo only
+        if is_shown(p.id, p.added, vis) and _SAFE_ID.fullmatch(p.id):
+            # Link-preview image (JPEG for widest support): one per shown photo
+            # for its share page; the first one is also the site's preview.
             og = im.copy()
-            og.thumbnail((1200, 1200))
-            og.save(OUT / "img" / "og.jpg", "JPEG", quality=82, exif=meta[0], xmp=meta[1])
-            og_written = True
+            og.thumbnail((OG_EDGE, OG_EDGE))
+            og.save(OUT / "img" / f"{p.id}-og.jpg", "JPEG", quality=82, exif=meta[0], xmp=meta[1])
+            e["_og"] = og.size
+            if not og_written:
+                og.save(OUT / "img" / "og.jpg", "JPEG", quality=82, exif=meta[0], xmp=meta[1])
+                og_written = True
         entries.append(e)
 
     apply_titles(entries, titles)
@@ -869,6 +932,10 @@ def build(photos: list[Photo], config: dict) -> None:
         if not is_shown(e["id"], e.get("added", ""), vis):
             e["draft"] = True
     shown = [e for e in entries if not e.get("draft")]
+    og_sizes = {e["id"]: e.pop("_og") for e in entries if "_og" in e}
+    for e in entries:
+        if e["id"] in og_sizes and not e.get("draft"):
+            e["page"] = True  # has a share page at p/<id>/
     (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
     cfg = dict(config, built=datetime.now(timezone.utc).strftime("%Y-%m-%d"), rights=r,
                collections=load_collections(known={e["id"] for e in entries}),
@@ -887,8 +954,26 @@ def build(photos: list[Photo], config: dict) -> None:
                      .replace("{{COPYRIGHT}}", html.escape(r["notice"]))
                      .replace("{{JSONLD}}", json_ld(shown, config, r, site_url))
                      .replace("{{OG_IMAGE}}", f"{site_url}/img/og.jpg" if og_written else ""))
+    # Share pages for shown photos (hidden ones get none).
+    template = (OUT / "photo.html").read_text()
+    (OUT / "photo.html").unlink()
+    for e in entries:
+        if e.get("page"):
+            d = OUT / "p" / e["id"]
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "index.html").write_text(photo_page(template, e, config, r, site_url, og_sizes[e["id"]]))
+
+    # Version-stamp local scripts/styles everywhere; the editor app compares
+    # its version with version.json to pick up a new build without waiting.
+    version = site_version()
+    for page in [OUT / "index.html", OUT / "edit" / "index.html", *OUT.glob("p/*/index.html")]:
+        text = stamp_assets(page.read_text(), version)
+        if page.parent.name == "edit":
+            text = text.replace("</head>", f'  <meta name="app-version" content="{version}">\n</head>', 1)
+        page.write_text(text)
+    (OUT / "version.json").write_text(json.dumps({"v": version}))
     (OUT / ".nojekyll").write_text("")
-    print(f"Built {len(entries)} photos into {OUT}")
+    print(f"Built {len(entries)} photos ({len(og_sizes)} share pages) into {OUT}")
 
 
 def main() -> int:
@@ -908,6 +993,11 @@ def main() -> int:
             # Fail loudly rather than publish an empty site over a good one.
             print("iCloud returned no photos; refusing to deploy an empty gallery.", file=sys.stderr)
             return 1
+    elif os.environ.get("GITHUB_ACTIONS") == "true":
+        # On GitHub a missing secret would publish an empty gallery over the
+        # good one; fail instead so the last good site stays up.
+        print("ICLOUD_ALBUM secret is missing or empty; refusing to deploy an empty gallery.", file=sys.stderr)
+        return 1
     else:
         photos = local_photos()
         print(f"No ICLOUD_ALBUM set; using {len(photos)} photos from photos/")

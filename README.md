@@ -21,7 +21,8 @@ update it right away, go to *Actions → Build & deploy site → Run workflow*.
    Photos are never committed to the repo.
 
 If iCloud is unreachable or returns an empty album, the build fails and the
-site keeps showing the last good version. GitHub emails you about failed runs
+site keeps showing the last good version (the same if the `ICLOUD_ALBUM`
+secret is ever missing on GitHub). GitHub emails you about failed runs
 (with hourly builds, an iCloud outage can mean one email per hour until it's
 back). Downloaded originals are cached between runs; a new cache copy is saved
 only when the set of photos changes.
@@ -188,6 +189,13 @@ them as hidden keywords. Highlights become the opening slideshow. New album phot
   ("Negotiating Escape — Florence, Italy — Mar 2026"), place at
   city/state/country level as plain text. Search engines also get the place
   and your tags (`contentLocation`, `keywords` in the JSON-LD).
+- **Share:** the full-screen viewer has a **Share** button (the share sheet on
+  phones; *Link copied* on computers). Each shown photo has its own page,
+  `…/p/<photo id>/`, so a shared link previews that photo with its title (in
+  iMessage, Instagram, email…). The page shows the print whole with a link
+  into the gallery; it has no scripts, so link previewers see it as is. Pages
+  are made by the hourly build; a photo released since then shares the
+  gallery link until the next build. Hidden photos get no page.
 - **Full-screen viewer:** the photo grows smoothly from its spot in the
   gallery (View Transitions). Use arrow keys or swipe to move between photos,
   swipe down to close. Each photo has its own shareable link (`#photo-…`).
@@ -224,6 +232,12 @@ No website can make images impossible to copy: screenshots and browser
 developer tools still work. These measures stop casual saving and make your
 ownership clear wherever the files end up, which is what matters if you ever
 need to file a takedown.
+
+## Updates reach phones right away
+Each build stamps a version on the site's scripts and styles and writes
+`version.json`. The editor app checks it when it opens or comes back to the
+foreground and reloads itself onto a new build (never while you have unsaved
+changes), instead of running an old cached copy for up to 10 minutes.
 
 ## Places list
 `site/edit/places.json` (the editor's built-in places list) is generated from

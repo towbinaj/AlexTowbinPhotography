@@ -575,3 +575,48 @@ def test_model_show_hide_overrides_date_rule():
     assert hid == [] and pub == ["a", "n"] and bhid == ["a", "x"] and bpub == ["n"]
     assert msg == "Photo a: shown on site" and bmsg == "2 photos: hidden from site"
     assert df == "2026-11-18T16:00:00Z" and bad_df is True
+
+
+# ---- versioned assets, share pages, missing secret ----
+
+def test_stamp_assets_only_local_js_css():
+    page = ('<link rel="stylesheet" href="style.css"><script src="app.js"></script><script src="../meta.js"></script>'
+            '<link href="https://fonts.googleapis.com/css2?family=X" rel="stylesheet"><a href="#top">x</a>'
+            '<link rel="manifest" href="site.webmanifest"><script src="x.js?v=old"></script>')
+    out = build.stamp_assets(page, "abc123")
+    assert 'href="style.css?v=abc123"' in out and 'src="app.js?v=abc123"' in out and 'src="../meta.js?v=abc123"' in out
+    assert 'https://fonts.googleapis.com/css2?family=X"' in out and 'href="#top"' in out and 'href="site.webmanifest"' in out
+    assert 'src="x.js?v=old"' in out  # already versioned: untouched
+
+
+def test_site_version_changes_with_content(tmp_path):
+    (tmp_path / "a.js").write_text("one")
+    v1 = build.site_version(tmp_path)
+    (tmp_path / "a.js").write_text("two")
+    assert build.site_version(tmp_path) != v1 and len(v1) == 10
+
+
+def test_photo_page_escapes_and_points_at_own_image():
+    template = (Path(__file__).resolve().parent.parent / "site" / "photo.html").read_text()
+    e = {"id": "abc123", "w": 3000, "h": 2000, "caption": 'Dusk <script>alert(1)</script> & "quotes"',
+         "taken": "2026-03-04T10:00:00Z", "place": FLORENCE,
+         "src": [{"url": "img/abc123-480.webp", "w": 480}, {"url": "img/abc123-960.webp", "w": 960}, {"url": "img/abc123-1600.webp", "w": 1600}]}
+    r = build.rights({"name": "Test Person", "copyright_start_year": 2026})
+    out = build.photo_page(template, e, {"name": "Test Person", "title": "Test Person Photography"}, r,
+                           "https://example.org/site", (1200, 800))
+    assert "<script>" not in out and "&lt;script&gt;" in out and "&quot;quotes&quot;" in out
+    assert '<meta property="og:image" content="https://example.org/site/img/abc123-og.jpg">' in out
+    assert '<link rel="canonical" href="https://example.org/site/p/abc123/">' in out
+    assert 'href="../../#photo-abc123"' in out and "Florence, Italy · Mar 2026" in out
+    assert 'src="../../img/abc123-1600.webp"' in out and "{{" not in out
+    assert "script-src 'none'" in out  # no scripts on share pages
+
+
+def test_ci_build_fails_without_album_secret(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("ICLOUD_ALBUM", raising=False)
+    monkeypatch.delenv("ICLOUD_ALBUM_TOKEN", raising=False)
+    monkeypatch.setattr(sys, "argv", ["build.py"])
+    monkeypatch.setattr(build, "build", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not build")))
+    assert build.main() == 1
+    assert "refusing to deploy an empty gallery" in capsys.readouterr().err

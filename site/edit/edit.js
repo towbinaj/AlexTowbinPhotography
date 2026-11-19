@@ -770,6 +770,33 @@
     else if (!locked && hiddenAt && Date.now() - hiddenAt > RELOCK_MS) showLock();
   });
 
+  // ---------------- updates ----------------
+  // Each build stamps its version into this page and version.json. If a newer
+  // build is live, reload (only when nothing unsaved is open), so the app
+  // doesn't run an old copy for up to 10 minutes after a change.
+  const myVersion = (document.querySelector('meta[name="app-version"]') || {}).content || "";
+  let newVersion = "";
+  async function checkUpdate() {
+    if (!myVersion) return;
+    try {
+      const j = await (await fetch("../version.json", { cache: "no-store" })).json();
+      if (typeof j.v === "string" && j.v && j.v !== myVersion) { newVersion = j.v; maybeReload(); }
+    } catch { /* offline: try again later */ }
+  }
+  function maybeReload() {
+    if (!newVersion) return;
+    let tried = null;
+    try { tried = sessionStorage.getItem("at-reloaded-for"); } catch { /* ignore */ }
+    if (tried === newVersion) return; // reloaded once for it already: don't loop
+    const busy = (!$("detail").hidden && dirty()) || ["setup", "bulktags", "bulkcoll", "picker", "settings"].some((id) => !$(id).hidden);
+    if (busy) return;
+    try { sessionStorage.setItem("at-reloaded-for", newVersion); } catch { /* ignore */ }
+    location.reload();
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkUpdate(); });
+  addEventListener("hashchange", maybeReload);
+  checkUpdate();
+
   // ---------------- boot ----------------
   async function loadDoc() {
     $("boot").textContent = "Loading…"; show("boot");

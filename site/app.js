@@ -326,6 +326,21 @@
   }
 
   $("lb-close").addEventListener("click", closePhoto);
+  // Share: the photo's own page (p/<id>/, built for shown photos) so link
+  // previews show this photo; photos released since the last build fall back
+  // to the gallery link. Phones get the share sheet; computers copy the link.
+  $("lb-share").addEventListener("click", async () => {
+    const p = photos[current];
+    if (!p) return;
+    const base = location.href.split("#")[0];
+    const url = p.page ? new URL(`p/${encodeURIComponent(p.id)}/`, base).href : `${base}#photo-${p.id}`;
+    const btn = $("lb-share"), say = (t) => { btn.textContent = t; setTimeout(() => { btn.textContent = "Share"; }, 1800); };
+    if (navigator.share) {
+      try { await navigator.share({ title: p.caption || document.title, url }); } catch { /* cancelled */ }
+      return;
+    }
+    try { await navigator.clipboard.writeText(url); say("Link copied"); } catch { prompt("Copy this link:", url); }
+  });
   $("lb-prev").addEventListener("click", () => step(-1));
   $("lb-next").addEventListener("click", () => step(1));
   $("lb-stage").addEventListener("click", (e) => { if (e.target === e.currentTarget) closePhoto(); });

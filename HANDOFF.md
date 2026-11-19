@@ -195,6 +195,19 @@ set changes (`actions/cache/restore` + `save`, key = hash of file names).
 app. Owner chose *new photos start hidden* and *unlisted, instant release*
 (not private). Data: `hidden`, `published`, `drafts_from` (set to the time
 the feature was added); rule shared by site/app/build, parity-tested.
+**Schedule fix (2026-11-18):** the cron trigger had never run (all builds
+were pushes): GitHub ignores schedules last edited via the Claude connection.
+Owner re-saved deploy.yml on github.com; scheduled runs work since 23:24 UTC.
+See CLAUDE.md, "The build schedule belongs to the owner".
+
+**Reliability + share pages (branch, 2026-11-19):** local .js/.css get
+`?v=<hash of site/>`; `version.json`; the editor reloads onto a newer build
+(once per version, never with unsaved changes). The build fails on GitHub if
+`ICLOUD_ALBUM` is missing. Per shown photo: `img/<id>-og.jpg` (1200 px, rights
+metadata) and `p/<id>/index.html` from `site/photo.html` (no JS; meta refresh
+was avoided because link previewers may follow it); photos.json `page: true`;
+lightbox **Share** button (Web Share / clipboard). Deleted the stale
+`claude/location-check` branch.
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

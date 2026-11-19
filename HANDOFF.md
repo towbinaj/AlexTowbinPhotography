@@ -206,8 +206,9 @@ See CLAUDE.md, "The build schedule belongs to the owner".
 `ICLOUD_ALBUM` is missing. Per shown photo: `img/<id>-og.jpg` (1200 px, rights
 metadata) and `p/<id>/index.html` from `site/photo.html` (no JS; meta refresh
 was avoided because link previewers may follow it); photos.json `page: true`;
-lightbox **Share** button (Web Share / clipboard). Deleted the stale
-`claude/location-check` branch.
+lightbox **Share** button (Web Share / clipboard). The stale
+`claude/location-check` branch is still there (deleting it from the session
+was not permitted); the owner can delete it on GitHub's Branches page.
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

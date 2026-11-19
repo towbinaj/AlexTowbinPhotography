@@ -139,7 +139,7 @@ background) and opens full screen.
   state/region. *Photo GPS* separately says whether the image file itself
   kept its location (yes/no only).
 - **Search** (top of the grid) by title, place, tag or collection; filters
-  include *Untitled* and *No location*.
+  include *Shown* (on the site), *Hidden*, *Untitled* and *No location*.
 - **Show on site:** photos you add to the album from now on **start hidden**
   (the grid marks them *Hidden · not on the site*; the *Hidden* filter lists
   them). Open one and tick **Show on site**, or select several and tap
@@ -156,6 +156,8 @@ background) and opens full screen.
   - **Collection:** pick one, create a new one, or *No collection*. Photos
     already in it keep their place; the rest go at the end in main page order.
   - **Location:** pick a place for all of them.
+  - **★ Highlight:** star all of them for the opening slideshow; if they're
+    all starred already, the button reads **★ Remove** and un-stars them.
   - **Show / Hide:** release or pull back all of them.
   Each is one save.
 - **Face ID lock:** when you first connect, *Lock the editor with Face ID*

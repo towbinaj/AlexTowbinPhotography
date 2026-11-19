@@ -620,3 +620,14 @@ def test_ci_build_fails_without_album_secret(monkeypatch, capsys):
     monkeypatch.setattr(build, "build", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not build")))
     assert build.main() == 1
     assert "refusing to deploy an empty gallery" in capsys.readouterr().err
+
+
+def test_model_bulk_highlight_on_and_off():
+    script = """
+    let d = M.normalize({highlights:['a']}, cleanTitle);
+    const on = M.applyBulk(d, ['a','b','c'], {highlight:true}, cleanTitle);
+    const off = M.applyBulk(on, ['a','c'], {highlight:false}, cleanTitle);
+    process.stdout.write(JSON.stringify([on.highlights, off.highlights, M.describeBulk(['a','b'], {highlight:true}), d.highlights]));
+    """
+    on, off, msg, orig = _node_model(script)
+    assert on == ["a", "b", "c"] and off == ["b"] and msg == "2 photos: highlighted" and orig == ["a"]

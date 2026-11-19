@@ -246,6 +246,7 @@
       if (has(op, "collection")) change.collection = op.collection || "";
       if (has(op, "place")) change.place = op.place;
       if (has(op, "shown")) change.shown = !!op.shown;
+      if (has(op, "highlight")) change.highlight = !!op.highlight;
       out = applyChange(out, change, cleanTitle);
     }
     return out;
@@ -258,6 +259,7 @@
     if (has(op, "collection")) parts.push(op.collection ? `collection "${op.collection}"` : "no collection");
     if (has(op, "place")) parts.push(op.place ? `location ${Meta.placeLabel(op.place)}` : "location removed");
     if (has(op, "shown")) parts.push(op.shown ? "shown on site" : "hidden from site");
+    if (has(op, "highlight")) parts.push(op.highlight ? "highlighted" : "highlight removed");
     return `${ids.length} photo${ids.length === 1 ? "" : "s"}: ${parts.join("; ") || "no change"}`;
   }
 

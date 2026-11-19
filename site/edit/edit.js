@@ -108,7 +108,7 @@
     const loose = all.filter((p) => !M.collectionOf(doc, p.id)).length;
     const noPlace = all.filter((p) => !doc.locations[p.id]).length;
     const hiddenN = all.filter((p) => !M.isShown(doc, p)).length;
-    const out = [["all", `All ${all.length}`], ["hidden", `Hidden ${hiddenN}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
+    const out = [["all", `All ${all.length}`], ["shown", `Shown ${all.length - hiddenN}`], ["hidden", `Hidden ${hiddenN}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
     doc.collections.forEach((c, i) => out.push(["c" + i, `${c.name} ${c.photos.filter((id) => all.some((p) => p.id === id)).length}`]));
     return out;
   }
@@ -129,6 +129,7 @@
     if (f === "untitled") return list.filter((p) => !doc.titles[p.id]);
     if (f === "noplace") return list.filter((p) => !doc.locations[p.id]);
     if (f === "hidden") return list.filter((p) => !M.isShown(doc, p));
+    if (f === "shown") return list.filter((p) => M.isShown(doc, p));
     if (f === "high") return list.filter((p) => doc.highlights.includes(p.id));
     if (f === "none") return list.filter((p) => !M.collectionOf(doc, p.id));
     if (f[0] === "c") {
@@ -551,7 +552,8 @@
   function selUpdate() {
     const n = selected.size;
     $("sel-count").textContent = n ? `${n} selected` : "Tap photos";
-    for (const id of ["bulk-tags", "bulk-coll", "bulk-place", "bulk-show", "bulk-hide"]) $(id).disabled = !n;
+    for (const id of ["bulk-tags", "bulk-coll", "bulk-place", "bulk-high", "bulk-show", "bulk-hide"]) $(id).disabled = !n;
+    $("bulk-high").textContent = n && [...selected].every((id) => doc.highlights.includes(id)) ? "★ Remove" : "★ Highlight";
     $("sel-all").textContent = shown.length && shown.every((p) => selected.has(p.id)) ? "Select none" : "Select all";
   }
   function setSelecting(on) {
@@ -670,6 +672,11 @@
   });
 
   // Location: the same place picker, applied to all selected photos.
+  // Star all selected; if they're all starred already, un-star them.
+  $("bulk-high").addEventListener("click", () => {
+    const on = ![...selected].every((id) => doc.highlights.includes(id));
+    listStatus("Saving…"); bulkSave({ highlight: on }, "list");
+  });
   $("bulk-show").addEventListener("click", () => { listStatus("Saving…"); bulkSave({ shown: true }, "list"); });
   $("bulk-hide").addEventListener("click", () => { listStatus("Saving…"); bulkSave({ shown: false }, "list"); });
   $("bulk-place").addEventListener("click", () => {

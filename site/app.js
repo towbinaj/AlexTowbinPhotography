@@ -11,6 +11,37 @@
     return d && !isNaN(d) ? d.toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "";
   };
 
+  // ---------------- visitor counts (GoatCounter, optional) ----------------
+  // No cookies, no third-party script: each count is a tiny image request to
+  // the site's GoatCounter (config "goatcounter"). Not counted: browsers that
+  // ask not to be tracked, local previews, and browsers marked as the owner's
+  // (visit the site with #nocount, or open the editor app in that browser).
+  const counter = (() => {
+    let url = "";
+    const off = () => {
+      try { if (localStorage.getItem("at-no-count") === "1") return true; } catch { /* ignore */ }
+      return navigator.doNotTrack === "1" || window.doNotTrack === "1" || /^(localhost|127\.|\[::1\])/.test(location.hostname);
+    };
+    function send(path, title, event) {
+      if (!url || off()) return;
+      const q = new URLSearchParams({ p: path, t: title || "", s: `${screen.width},${screen.height},${devicePixelRatio || 1}`, rnd: Math.random().toString(36).slice(2) });
+      if (event) q.set("e", "true"); else q.set("r", document.referrer || "");
+      const img = new Image();
+      img.referrerPolicy = "no-referrer-when-downgrade";
+      img.src = `${url}?${q}`;
+    }
+    return {
+      init(u) { url = typeof u === "string" && /^https:\/\/[a-z0-9-]+\.goatcounter\.com\/count$/.test(u) ? u : ""; },
+      page() { send(location.pathname, document.title, false); },
+      event(name, title) { send(name, title, true); },
+    };
+  })();
+  if (location.hash === "#nocount") {
+    try { localStorage.setItem("at-no-count", "1"); } catch { /* ignore */ }
+    history.replaceState(null, "", location.pathname + location.search);
+    alert("Visits from this browser won't be counted.");
+  }
+
   let photos = [];      // what the gallery shows (all, or one collection)
   let allPhotos = [];
   let view = "stream";
@@ -266,6 +297,7 @@
     $("lb-caption").textContent = label;
     $("lb-info").textContent = label; // phones: own line (the bar is too narrow)
     $("lb-info").hidden = !label;
+    counter.event(`photo/${p.id}`, p.caption || monthYear(p.taken));
     history.replaceState(null, "", `#photo-${p.id}`);
     for (const d of [1, -1]) { // warm the neighbours
       const n = photos[(current + d + photos.length) % photos.length];
@@ -334,6 +366,7 @@
     if (!p) return;
     const base = location.href.split("#")[0];
     const url = p.page ? new URL(`p/${encodeURIComponent(p.id)}/`, base).href : `${base}#photo-${p.id}`;
+    counter.event(`share/${p.id}`, p.caption || "Share");
     const btn = $("lb-share"), say = (t) => { btn.textContent = t; setTimeout(() => { btn.textContent = "Share"; }, 1800); };
     if (navigator.share) {
       try { await navigator.share({ title: p.caption || document.title, url }); } catch { /* cancelled */ }
@@ -481,6 +514,7 @@
         if ((c ? c.slug : null) === active && photos === (c ? c.items : allPhotos)) return;
         active = c ? c.slug : null;
         photos = c ? c.items : allPhotos;
+        if (c) counter.event(`collection/${c.slug}`, c.name);
         title.replaceChildren(...(c ? [document.createTextNode(c.name)] : allTitle.map((n) => n.cloneNode(true))));
         tiles.length = 0;
         buildTiles();
@@ -515,6 +549,8 @@
     const rawCollections = isObj(live) ? live.collections : cfg.collections;
     const rawHighlights = isObj(live) ? live.highlights : cfg.highlights;
     applyConfig(cfg);
+    counter.init(cfg.counter);
+    counter.page();
     // Hidden photos (not released, or pulled back in the editor) are left out
     // everywhere: gallery, slideshow, collections. Live rule when the data repo
     // answered, else the flag baked in at build.

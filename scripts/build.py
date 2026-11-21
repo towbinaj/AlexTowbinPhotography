@@ -30,6 +30,7 @@ import re
 import shutil
 import sys
 import time
+import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -828,6 +829,16 @@ def apply_titles(entries: list[dict], titles: dict[str, str]) -> None:
             e["caption"] = t
 
 
+GOATCOUNTER_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,48}")
+
+
+def goatcounter_url(config: dict) -> str:
+    """Count endpoint for GoatCounter (config "goatcounter": the site code you
+    chose at signup, e.g. "alextowbin"), or "" when visitor counting is off."""
+    code = str(config.get("goatcounter") or "").strip().lower()
+    return f"https://{code}.goatcounter.com/count" if GOATCOUNTER_RE.fullmatch(code) else ""
+
+
 def data_settings(config: dict) -> dict:
     """Where the page reads live titles/order from and the editor saves them."""
     repo = str(config.get("data_repo") or "")
@@ -880,7 +891,10 @@ def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_
     page_url = f"{site_url}/p/{pid}/" if site_url else "./"
     srcs = e["src"]
     mid = srcs[min(2, len(srcs) - 1)]
+    counter = goatcounter_url(config)
+    pixel = (f"{counter}?p={urllib.parse.quote(f'/p/{pid}/')}&t={urllib.parse.quote(page_title)}" if counter else "")
     vals = {
+        "COUNTER_PIXEL": pixel,
         "PAGE_TITLE": page_title, "DESCRIPTION": " · ".join(x for x in (subline, r["notice"]) if x),
         "AUTHOR": r["holder"], "COPYRIGHT": r["notice"], "SITE_NAME": site_name, "SITE_NAME_SHORT": name,
         "PAGE_URL": page_url, "OG_IMAGE": f"{base}img/{pid}-og.jpg", "OG_W": str(og_size[0]), "OG_H": str(og_size[1]),
@@ -892,6 +906,8 @@ def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_
     out = template
     for k, v in vals.items():
         out = out.replace("{{" + k + "}}", html.escape(v, quote=True))
+    if not counter:  # counting off: drop the pixel element entirely
+        out = re.sub(r'\s*<img class="count"[^>]*>', "", out)
     return out
 
 
@@ -1018,6 +1034,7 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
     site_repo = os.environ.get("GITHUB_REPOSITORY", "")
     cfg = dict(config, built=now.strftime("%Y-%m-%d"), built_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"), rights=r,
                site_repo=site_repo if DATA_REPO_RE.fullmatch(site_repo) else "",  # for the editor's Publish now
+               counter=goatcounter_url(config),
                collections=load_collections(known={e["id"] for e in entries}),
                highlights=load_highlights(known={e["id"] for e in entries}),
                **data_settings(config))

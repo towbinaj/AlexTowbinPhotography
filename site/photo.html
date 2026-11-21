@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- One page per shown photo (built by scripts/build.py), so a shared link
        previews that photo. No scripts: link previewers see exactly this. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.goatcounter.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{PAGE_TITLE}}</title>
   <meta name="description" content="{{DESCRIPTION}}">
@@ -45,5 +45,6 @@
     </div>
   </main>
   <footer class="mono">{{COPYRIGHT}}</footer>
+  <img class="count" src="{{COUNTER_PIXEL}}" alt="" width="1" height="1" referrerpolicy="no-referrer-when-downgrade">
 </body>
 </html>

@@ -14,6 +14,7 @@
   };
   const mem = {};
   const getKey = () => store.get(KEY) || mem.key || "";
+  store.set("at-no-count", "1"); // the owner's browser: don't count its visits to the site
   // Second key, only for "Publish now" (site repo, Actions: read and write).
   // With the Face ID lock (prf) both keys are sealed together as one bundle.
   const PUB = "at-pub-key";

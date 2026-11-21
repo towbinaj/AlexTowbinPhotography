@@ -668,3 +668,22 @@ def test_render_key_tracks_image_settings(monkeypatch):
     assert build.render_key({"name": "A", "trim_white_borders": True}) != base
     monkeypatch.setattr(build, "SIZES", [480, 960])
     assert build.render_key({"name": "A"}) != base
+
+
+# ---- visitor counts (GoatCounter) ----
+
+def test_goatcounter_url_validates_code():
+    assert build.goatcounter_url({"goatcounter": "alextowbin"}) == "https://alextowbin.goatcounter.com/count"
+    assert build.goatcounter_url({"goatcounter": " AlexTowbin "}) == "https://alextowbin.goatcounter.com/count"
+    for bad in ["", None, "a", "evil.com/x", "x\"onerror", "-start", "a" * 60, "has space"]:
+        assert build.goatcounter_url({"goatcounter": bad}) == ""
+
+
+def test_share_page_pixel_only_when_counting():
+    template = (Path(__file__).resolve().parent.parent / "site" / "photo.html").read_text()
+    e = {"id": "abc123", "w": 10, "h": 10, "caption": 'A "quoted" <title>', "taken": "", "src": [{"url": "img/abc123-480.webp", "w": 480}]}
+    r = build.rights({"name": "Test Person"})
+    on = build.photo_page(template, e, {"name": "Test Person", "goatcounter": "testsite"}, r, "", (10, 10))
+    off = build.photo_page(template, e, {"name": "Test Person"}, r, "", (10, 10))
+    assert '<img class="count" src="https://testsite.goatcounter.com/count?p=/p/abc123/&amp;t=A%20%22quoted%22%20%3Ctitle%3E' in on
+    assert "goatcounter.com/count" not in off and 'class="count"' not in off and "{{" not in off

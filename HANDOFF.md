@@ -239,6 +239,13 @@ Storage plan agreed with the owner: stay on GitHub Pages (1 GB ≈ 550
 photos); near ~500 photos, drop the 3200 px size or move images to
 Cloudflare R2. Owner asked about Google Drive/Dropbox: not suitable
 (throttled links, expiring OAuth tokens).
+**Visitor counts (2026-11-21, branch):** GoatCounter, owner's choice of
+"visitor numbers". config `goatcounter` (site code) -> config.json `counter`
+URL (validated). app.js sends image-pixel hits (no third-party JS): page view,
+`photo/<id>` events (in fillBar), `collection/<slug>`, `share/<id>`; share
+pages carry a static pixel. Skipped: DNT, localhost, `at-no-count` (set by the
+editor app and by visiting with `#nocount`). CSP img-src allows
+`https://*.goatcounter.com`. Inactive until the owner signs up and gives the code.
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

@@ -62,6 +62,7 @@ Edit `config.json`:
 | `copyright_start_year` | first year of the notice, e.g. `2026` → "© 2026–2027 …" in later years |
 | `trim_white_borders` | `false` (default) keeps photos exactly as framed; `true` crops uniform white borders |
 | `data_repo` | `owner/repo` holding `curation.json` (titles + order); the editor saves there |
+| `goatcounter` | your GoatCounter site code (e.g. `alextowbin`) to count visitors; empty = off |
 
 ### Photo titles and order
 Titles, order, collections, highlights, tags and locations are all set in
@@ -248,6 +249,23 @@ No website can make images impossible to copy: screenshots and browser
 developer tools still work. These measures stop casual saving and make your
 ownership clear wherever the files end up, which is what matters if you ever
 need to file a takedown.
+
+## Visitor counts (optional)
+With a free [GoatCounter](https://www.goatcounter.com/) account, the site
+counts visits without cookies or tracking individuals (so no consent banner).
+You see daily visitors, where they came from (Instagram, Google…), screen
+sizes, and which photos were opened (`photo/<id>` with its title), which
+collections were viewed (`collection/<name>`) and what was shared
+(`share/<id>`). Visits to share pages (`/p/<id>/`) count as pages.
+
+- **Set up:** sign up at goatcounter.com and choose a site code (your
+  dashboard becomes `https://<code>.goatcounter.com`), then put the code in
+  `config.json` as `"goatcounter": "<code>"`.
+- **Not counted:** browsers that send "Do Not Track", local previews, and your
+  own browsers: opening the editor app marks that browser, or visit the site
+  once with `#nocount` at the end of the address (e.g. Safari on your phone).
+  Share pages have no scripts, so a visit to one is counted regardless.
+- No third-party script is loaded: each count is a tiny image request.
 
 ## Updates reach phones right away
 Each build stamps a version on the site's scripts and styles and writes

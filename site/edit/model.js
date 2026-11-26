@@ -263,6 +263,19 @@
     return `${ids.length} photo${ids.length === 1 ? "" : "s"}: ${parts.join("; ") || "no change"}`;
   }
 
+  // "Main page No." counts only photos shown on the site (what visitors see).
+  // Turn shown-position n (1-based) into the 1-based position in the full
+  // main order (hidden photos included) that applyChange's mainPos expects:
+  // the photo goes just before the shown photo now at n, or after the last.
+  function mainPosFromShown(mainIds, isShownId, id, n) {
+    const ids = mainIds.filter((x) => x !== id);
+    const shown = ids.filter(isShownId);
+    if (!shown.length) return 1;
+    const k = Math.min(Math.max(1, Math.round(Number(n)) || 1), shown.length + 1);
+    const idx = k <= shown.length ? ids.indexOf(shown[k - 1]) : ids.indexOf(shown[shown.length - 1]) + 1;
+    return idx + 1;
+  }
+
   // Short commit message describing what changed for one photo.
   function describe(before, after, id) {
     const parts = [];
@@ -295,7 +308,7 @@
   }
 
   const api = { normalize, orderPhotos, collectionOf, applyChange, describe, serialize, cleanName, MAX_NAME,
-    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown };
+    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, mainPosFromShown };
   root.EditModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

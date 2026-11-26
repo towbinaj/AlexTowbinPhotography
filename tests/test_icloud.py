@@ -687,3 +687,22 @@ def test_share_page_pixel_only_when_counting():
     off = build.photo_page(template, e, {"name": "Test Person"}, r, "", (10, 10))
     assert '<img class="count" src="https://testsite.goatcounter.com/count?p=/p/abc123/&amp;t=A%20%22quoted%22%20%3Ctitle%3E' in on
     assert "goatcounter.com/count" not in off and 'class="count"' not in off and "{{" not in off
+
+
+def test_main_page_number_counts_only_shown_photos():
+    # Main order: h1 and h2 are hidden (new uploads sort first), the rest shown.
+    script = """
+    const main = ['h1','h2','a','b','c','d'];
+    const shownId = (x) => !x.startsWith('h');
+    const pos = (id, n) => M.mainPosFromShown(main, shownId, id, n);
+    const place = (id, n) => { const ids = main.filter((x) => x !== id); ids.splice(pos(id, n) - 1, 0, id); return ids.join(''); };
+    process.stdout.write(JSON.stringify([place('d', 1), place('a', 4), place('b', 2), place('c', 99), place('h1', 2),
+      M.mainPosFromShown(['h1'], shownId, 'x', 3)]));
+    """
+    d_first, a_last, b_same, c_clamped, h1_second, none_shown = _node_model(script)
+    assert d_first == "h1h2dabc"      # No. 1 = before the first shown photo, hidden ones stay ahead
+    assert a_last == "h1h2bcda"       # No. 4 of 4 = after the last shown photo
+    assert b_same == "h1h2abcd"       # unchanged position
+    assert c_clamped == "h1h2abdc"    # beyond the end = last
+    assert h1_second == "h2ah1bcd"    # a hidden photo being released lands at No. 2 among shown ones
+    assert none_shown == 1

@@ -67,7 +67,16 @@
   }
   const save = (change) => commit((d) => {
     const mainIds = M.orderPhotos(all, d.order).map((p) => p.id);
-    const next = M.applyChange(d, { ...change, mainIds }, clean);
+    const c = { ...change, mainIds };
+    if (c.shownPos != null) {
+      // Main page No. is among shown photos; convert using the latest data
+      // (and this change's own Show on site, if it has one).
+      const byId = new Map(all.map((p) => [p.id, p]));
+      const isShownId = (x) => (x === change.id && "shown" in change ? change.shown : !!byId.get(x) && M.isShown(d, byId.get(x)));
+      c.mainPos = M.mainPosFromShown(mainIds, isShownId, change.id, c.shownPos);
+      delete c.shownPos;
+    }
+    const next = M.applyChange(d, c, clean);
     return { next, message: M.describe(d, next, change.id) };
   });
 
@@ -81,7 +90,17 @@
   };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const ordered = () => M.orderPhotos(all, doc.order);
-  function show(id) { for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen", "lock", "bulktags", "bulkcoll"]) $(s).hidden = s !== id; }
+  function show(id) {
+    for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen", "lock", "bulktags", "bulkcoll"]) $(s).hidden = s !== id;
+    syncTop();
+  }
+  // The pinned top bar's height (it changes with screen and text size).
+  function syncTop() {
+    const t = document.querySelector(".screen:not([hidden]) > .top");
+    if (t && t.offsetHeight) document.documentElement.style.setProperty("--top-h", t.offsetHeight + "px");
+  }
+  addEventListener("resize", syncTop);
+  if (window.ResizeObserver) { const ro = new ResizeObserver(syncTop); document.querySelectorAll(".top").forEach((t) => ro.observe(t)); }
   const Meta = window.PhotoMeta;
   const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -240,10 +259,7 @@
     pendingPlace = doc.locations[p.id] || null;
     $("f-tag-in").value = "";
     renderTags(); renderPlace();
-    const list = ordered();
-    $("f-mpos").value = list.findIndex((x) => x.id === p.id) + 1;
-    $("f-mpos").max = list.length;
-    $("f-mpos-of").textContent = `of ${list.length}`;
+    fillMainPos(p, M.isShown(doc, p));
     $("f-taken").textContent = longDate(p.taken);
     $("f-added").textContent = longDate(p.added);
     const loc = $("f-loc");
@@ -282,10 +298,11 @@
     if (v.shown !== base.shown) change.shown = v.shown;
     if (v.tags !== base.tags) change.tags = pendingTags.slice();
     if (v.place !== base.place) change.place = pendingPlace;
-    if (String(v.mpos) !== String(base.mpos)) {
+    if (String(v.mpos) !== String(base.mpos) && v.mpos !== "") {
+      const max = Number($("f-mpos").max) || 1;
       const n = Math.round(Number(v.mpos));
-      if (!Number.isFinite(n) || n < 1 || n > all.length) { status(`Main page No. must be 1–${all.length}.`, true); return; }
-      change.mainPos = n;
+      if (!Number.isFinite(n) || n < 1 || n > max) { status(`Main page No. must be 1–${max}.`, true); return; }
+      change.shownPos = n;
     }
     $("f-save").disabled = true; status("Saving…");
     try {
@@ -311,7 +328,29 @@
     $("f-shown-note").textContent = on ? "On the site" : draftByDate ? "New · hidden until released" : "Hidden: not on the site";
     $("f-shown").closest(".showrow").classList.toggle("off", !on);
   }
-  $("f-shown").addEventListener("change", () => { shownNote(); refreshSave(); });
+  $("f-shown").addEventListener("change", () => {
+    shownNote();
+    const p = shown[current];
+    if (p) fillMainPos(p, $("f-shown").checked, true);
+    refreshSave();
+  });
+  // Main page No.: position among the photos shown on the site (what visitors
+  // see), not among all photos. Hidden photos have none.
+  function fillMainPos(p, willShow, keepTyped) {
+    const list = ordered();
+    const shownList = list.filter((x) => x.id !== p.id && M.isShown(doc, x));
+    const inp = $("f-mpos");
+    if (!willShow) {
+      inp.disabled = true; inp.value = ""; inp.max = 1;
+      $("f-mpos-of").textContent = "hidden";
+      return;
+    }
+    const before = list.slice(0, list.findIndex((x) => x.id === p.id)).filter((x) => M.isShown(doc, x)).length;
+    inp.disabled = false;
+    inp.max = shownList.length + 1;
+    if (!keepTyped || !inp.value) inp.value = before + 1;
+    $("f-mpos-of").textContent = `of ${shownList.length + 1}`;
+  }
   $("f-coll").addEventListener("change", () => { fillCollPos(); refreshSave(); if ($("f-coll").value === NEW) $("f-newcoll").focus(); });
   $("back").addEventListener("click", () => { if (dirty() && !confirm("Discard unsaved changes?")) return; location.hash = ""; });
   $("prev").addEventListener("click", () => step(-1));

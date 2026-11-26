@@ -130,7 +130,8 @@ background) and opens full screen.
   *No collection* or any collection.
 - **Photo:** tap one to set its **title**, **collection** (pick one or
   *New collection…*), its **No. in the collection**, **highlight on main
-  page**, and its **main page No.** Also shows when it was taken and added,
+  page**, and its **main page No.** (its place among the photos shown on the
+  site, as visitors see them; hidden photos have none) Also shows when it was taken and added,
   and whether the photo kept its **location** (yes/no only; coordinates are
   never published). Swipe or use the arrows for the next photo. **Save**
   commits to the data repository.

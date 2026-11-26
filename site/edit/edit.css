@@ -16,12 +16,13 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; overscroll-behavior-y: none; }
 body {
   margin: 0; background: var(--bg); color: var(--fg);
   font: 300 16px/1.5 var(--sans); -webkit-font-smoothing: antialiased;
   overflow-x: hidden; -webkit-tap-highlight-color: transparent;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior-y: none;
 }
 a { color: var(--accent); text-decoration: none; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
@@ -30,9 +31,12 @@ img { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
 h1 { font: 400 clamp(34px, 9vw, 52px)/1 var(--serif); margin: 0 0 14px; letter-spacing: -.01em; }
 
 /* ---------- top bar ---------- */
+/* Pinned to the top (under the iPhone status bar, which it covers); screens
+   with a bar leave room for it. edit.js keeps --top-h at its real height. */
 .top {
-  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
-  padding: 12px var(--pad); background: rgba(11, 11, 10, .92);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
+  padding: calc(12px + env(safe-area-inset-top)) calc(var(--pad) + env(safe-area-inset-right)) 12px calc(var(--pad) + env(safe-area-inset-left));
+  background: rgba(11, 11, 10, .96);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line);
 }
 .brand { font-size: 30px; margin: 0; flex: 1; }
@@ -103,7 +107,8 @@ input:disabled { opacity: .4; }
 .btn.ghost { background: none; color: var(--fg); border: 1px solid var(--line); }
 
 /* ---------- setup / settings ---------- */
-.setup { min-height: 100vh; display: grid; place-items: center; padding: 24px var(--pad); }
+.setup { min-height: 100vh; display: grid; place-items: center; padding: calc(24px + env(safe-area-inset-top)) var(--pad) 24px; }
+.screen:has(> .top) { padding-top: var(--top-h, calc(65px + env(safe-area-inset-top))); }
 .card { width: 100%; max-width: 460px; display: grid; gap: 12px; }
 .card p { margin: 0; color: var(--muted); }
 .eyebrow { color: var(--accent) !important; }

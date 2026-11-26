@@ -52,7 +52,9 @@ owner's iCloud shared album, processes them, and builds a static site into
   `title_case()` (build.py) and `site/titlecase.js`; keep them identical
   (shared cases in `tests/titlecase_cases.json`).
 - **Show on site:** `hidden` / `published` / `drafts_from` in curation.json;
-  photos added after `drafts_from` start hidden (owner chose this). Hidden =
+  photos added between `drafts_from` and `DRAFTS_UNTIL` (2026-11-26) started
+  hidden. Owner then went **site-first**: photos added later appear at once
+  (still opt-in for the Work page; Hide pulls one back). Hidden =
   unlisted, not private (owner chose instant release over privacy): still in
   photos.json with `draft: true`, but left out of the gallery, JSON-LD and
   og image. Rule in `site/meta.js` `isShown()` = `is_shown()` in build.py.

@@ -172,6 +172,11 @@ the gallery (hidden until a collection exists), `#collection-<slug>` deep
 links, heading becomes the collection name, lightbox steps within it. Built
 from live data, baked fallback in `config.json` `collections`
 (`load_collections()`). `#edit` forces *All* (positions are global).
+**Site-first (2026-11-26):** owner now publishes on the site before Instagram.
+`DRAFTS_UNTIL` in meta.js = build.py: photos added after it are shown at
+once (they still need *On Work page* for the Work list); earlier drafts stay
+hidden until released.
+
 **On Work page (opt-in, 2026-11-26):** `on_work`/`off_work` in curation.json,
 `onWork()` in meta.js = `on_work()` in build.py (parity test); photos added
 after `WORK_FROM` start off Work. Work's All list = shown + on Work;

@@ -62,8 +62,11 @@
   // Show on site? (kept identical to visibility()/is_shown() in build.py)
   //   hidden: [ids]       always hidden (pulled back)
   //   published: [ids]    always shown (released)
-  //   drafts_from: ISO    photos added to the album at/after this start hidden
+  //   drafts_from: ISO    photos added to the album at/after this start hidden…
+  //   DRAFTS_UNTIL        …until this moment: photos added later appear at
+  //                       once (owner went site-first on 2026-11-26)
   // Everything else is shown. Untrusted input: bad values are ignored.
+  const DRAFTS_UNTIL = Date.parse("2026-11-26T20:45:00Z");
   const ISO = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
   function visibility(data) {
     const d = isObj(data) ? data : {};
@@ -75,7 +78,7 @@
     if (vis.hidden.has(id)) return false;
     if (vis.published.has(id)) return true;
     const t = typeof added === "string" && ISO.test(added) ? Date.parse(added) : NaN;
-    return !(vis.from !== null && Number.isFinite(t) && t >= vis.from);
+    return !(vis.from !== null && Number.isFinite(t) && t >= vis.from && t < DRAFTS_UNTIL);
   }
 
   // On the Work page? (kept identical to work()/on_work() in build.py)

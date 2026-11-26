@@ -582,6 +582,7 @@ VIS_CASES = [  # (id, added)
     ("h", "2026-01-01T00:00:00Z"), ("p", "2027-01-01T00:00:00Z"), ("both", "2027-01-01T00:00:00Z"),
     ("new-released", "2026-12-01T00:00:00Z"), ("noadded", ""), ("junk", "yesterday"),
     ("offset", "2026-11-18T12:00:00-05:00"), ("offset-before", "2026-11-18T10:59:00-05:00"), ("dateonly", "2026-11-19"),
+    ("last-draft", "2026-11-26T20:44:59Z"), ("site-first", "2026-11-26T20:45:00Z"), ("later", "2027-03-01T00:00:00Z"),
 ]
 
 
@@ -593,7 +594,8 @@ def test_visibility_matches_js_and_rules(tmp_path):
     py = [build.is_shown(i, a, vis) for i, a in VIS_CASES]
     assert dict(zip([i for i, _ in VIS_CASES], py)) == {
         "old": True, "new": False, "newer": False, "h": False, "p": True, "both": False,
-        "new-released": True, "noadded": True, "junk": True, "offset": False, "offset-before": True, "dateonly": False}
+        "new-released": True, "noadded": True, "junk": True, "offset": False, "offset-before": True, "dateonly": False,
+        "last-draft": False, "site-first": True, "later": True}
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"drafts_from": "soon", "hidden": "h", "published": [1]}))
     assert all(build.is_shown(i, a, build.visibility(bad)) for i, a in VIS_CASES)
@@ -612,11 +614,11 @@ def test_model_show_hide_overrides_date_rule():
     script = """
     let d = M.normalize({drafts_from: '2026-11-18T16:00:00Z', hidden: ['a'], published: []}, cleanTitle);
     const P = (id, added) => ({id, added});
-    const before = [M.isShown(d, P('a','2026-01-01')), M.isShown(d, P('n','2026-12-01T00:00:00Z'))];
+    const before = [M.isShown(d, P('a','2026-01-01')), M.isShown(d, P('n','2026-11-20T00:00:00Z'))];
     let n = M.applyChange(d, {id:'a', shown:true}, cleanTitle);
     n = M.applyChange(n, {id:'n', shown:true}, cleanTitle);
     const b = M.applyBulk(n, ['a','x'], {shown:false}, cleanTitle);
-    process.stdout.write(JSON.stringify([before, M.isShown(n, P('a','2026-01-01')), M.isShown(n, P('n','2026-12-01T00:00:00Z')),
+    process.stdout.write(JSON.stringify([before, M.isShown(n, P('a','2026-01-01')), M.isShown(n, P('n','2026-11-20T00:00:00Z')),
       n.hidden, n.published, b.hidden, b.published, M.describe(d, n, 'a'), M.describeBulk(['a','x'], {shown:false}),
       JSON.parse(M.serialize(n)).drafts_from, M.normalize({drafts_from:'nope'}, cleanTitle).drafts_from === undefined]));
     """

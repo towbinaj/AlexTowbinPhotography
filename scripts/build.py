@@ -779,14 +779,18 @@ def visibility(path: Path = CURATION) -> dict:
     return {"hidden": ids(d.get("hidden")), "published": ids(d.get("published")), "from": _iso_time(d.get("drafts_from"))}
 
 
+DRAFTS_UNTIL = _iso_time("2026-11-26T20:45:00Z")  # photos added later appear at once (site-first)
+
+
 def is_shown(pid: str, added: str, vis: dict) -> bool:
-    """Pulled back -> hidden; released -> shown; added at/after drafts_from -> hidden (draft); else shown."""
+    """Pulled back -> hidden; released -> shown; added between drafts_from and
+    DRAFTS_UNTIL -> hidden (draft); else shown."""
     if pid in vis["hidden"]:
         return False
     if pid in vis["published"]:
         return True
     t = _iso_time(added)
-    return not (vis["from"] is not None and t is not None and t >= vis["from"])
+    return not (vis["from"] is not None and t is not None and vis["from"] <= t < DRAFTS_UNTIL)
 
 
 # ---- on the Work page (kept identical to work()/onWork() in site/meta.js) ----

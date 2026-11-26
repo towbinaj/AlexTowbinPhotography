@@ -153,10 +153,13 @@ background) and opens full screen.
   you ★ them) but not in the Work page's full list until you tick **On Work
   page** (or select several and tap **On Work**). Photos that were already
   on the site stay on Work. The *Not on Work* filter lists the rest.
-- **Show on site:** photos you add to the album from now on **start hidden**
-  (the grid marks them *Hidden · not on the site*; the *Hidden* filter lists
-  them). Open one and tick **Show on site**, or select several and tap
-  **Show**, to release them; untick / **Hide** pulls a photo back. Either
+- **Show on site:** photos you add to the album **appear on the site right
+  away** (site-first, since 2026-11-26); untick **Show on site** or tap
+  **Hide** to pull one back. Photos added from 2026-11-18 until then started
+  hidden and stay hidden until you release them (the grid marks them
+  *Hidden · not on the site*; the *Hidden* filter lists them). Open one and
+  tick **Show on site**, or select several and tap **Show**, to release
+  them; untick / **Hide** pulls a photo back. Either
   way it takes effect on the site within about 5 minutes. Hidden photos are
   left off the gallery, slideshow, collections and search-engine data, but
   they are **not private**: their image files are still on the site (that's

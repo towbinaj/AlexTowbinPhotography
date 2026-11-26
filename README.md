@@ -157,6 +157,15 @@ background) and opens full screen.
   they are **not private**: their image files are still on the site (that's
   what lets the editor show them and makes releasing instant), so someone
   who knows where to look could find them.
+- **Order** (top bar): drag photos into order instead of typing numbers.
+  From the normal grid it orders the **main page** (only photos shown on the
+  site; hidden ones keep their places); with a collection's filter selected
+  it orders **that collection**. Drag a photo by **⠿**, or nudge it with
+  **‹ ›**, then **Save** (one save for the whole order).
+- **Undo:** after every save (a photo, a bulk change, a tag edit, a new
+  order) an **Undo** bar appears for 20 seconds. It puts back exactly what
+  was there before, unless the data changed in the meantime (then it says so
+  and changes nothing). Older changes stay in the data repository's history.
 - **Several photos at once:** tap **Select**, tap the photos (or *Select
   all* for the current filter/search), then use the bar at the bottom:
   - **Tags:** each tag shows ✓ (all selected have it), – (some) or empty;

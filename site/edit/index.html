@@ -52,6 +52,7 @@
       <h1 class="brand">Editor</h1>
       <span class="mono count" id="list-count"></span>
       <button type="button" class="icon-btn mono" id="sel-start">Select</button>
+      <button type="button" class="icon-btn mono" id="ro-start">Order</button>
       <button type="button" class="icon-btn mono" id="open-tags">Tags</button>
       <button type="button" class="icon-btn mono" id="open-settings" aria-label="Settings">Key</button>
     </header>
@@ -80,6 +81,23 @@
       <button type="button" class="btn ghost small" id="bulk-hide" disabled>Hide</button>
     </div>
   </section>
+
+  <!-- Reorder: drag photos (main page = shown photos, or one collection) -->
+  <section class="screen" id="reorder" hidden aria-labelledby="ro-h">
+    <header class="top">
+      <button type="button" class="icon-btn mono" id="ro-cancel">Cancel</button>
+      <h1 class="brand small" id="ro-h">Order</h1>
+      <button type="button" class="btn small" id="ro-save" disabled>Save</button>
+    </header>
+    <p class="mono hint pad" id="ro-hint"></p>
+    <ol class="rgrid" id="ro-grid"></ol>
+  </section>
+
+  <!-- Undo the last save (shown for a few seconds after each save) -->
+  <div class="undo mono" id="undo" role="status" aria-live="polite" hidden>
+    <span id="undo-msg"></span>
+    <button type="button" class="btn small" id="undo-btn">Undo</button>
+  </div>
 
   <!-- Bulk: tags for the selected photos -->
   <section class="screen" id="bulktags" hidden aria-labelledby="bt-h">

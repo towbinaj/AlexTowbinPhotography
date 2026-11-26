@@ -706,3 +706,19 @@ def test_main_page_number_counts_only_shown_photos():
     assert c_clamped == "h1h2abdc"    # beyond the end = last
     assert h1_second == "h2ah1bcd"    # a hidden photo being released lands at No. 2 among shown ones
     assert none_shown == 1
+
+
+def test_model_reorder_and_undo_check():
+    script = """
+    const d = M.normalize({order:['h1','a','b','h2','c'], collections:[{name:'One', photos:['x','y','z']}]}, cleanTitle);
+    const m = M.reorderMain(d, ['h1','a','b','h2','c'], ['c','a','b']);
+    const c = M.reorderCollection(d, 'One', ['z','x']);
+    const roundTrip = M.normalize(JSON.parse(M.serialize(m)), cleanTitle);
+    process.stdout.write(JSON.stringify([m.order, c.collections[0].photos, d.order,
+      M.sameDoc(m, roundTrip), M.sameDoc(m, d)]));
+    """
+    order, coll, orig, same_rt, same_other = _node_model(script)
+    assert order == ["h1", "c", "a", "h2", "b"]   # hidden h1/h2 keep their slots; shown ones take the new sequence
+    assert coll == ["z", "x", "y"]                 # y wasn't in the new list: kept, at the end
+    assert orig == ["h1", "a", "b", "h2", "c"]     # input untouched
+    assert same_rt is True and same_other is False # a saved doc read back compares equal (undo check)

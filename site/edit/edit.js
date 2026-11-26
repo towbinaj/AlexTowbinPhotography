@@ -54,13 +54,19 @@
 
   // Re-reads the latest file, applies `edit` to it and commits. `edit(doc)`
   // returns { next, message }. Retries once if someone saved in between.
-  async function commit(edit) {
+  // lastChange: what the most recent save replaced, for Undo.
+  let lastChange = null;
+  async function commit(edit, isUndo) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const cur = await readDoc();
       const { next, message } = edit(cur.doc);
       const body = { message, content: b64enc(M.serialize(next)), branch: "main", ...(cur.sha ? { sha: cur.sha } : {}) };
       const w = await fetch(api("/contents/curation.json"), { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (w.ok) { const j = await w.json().catch(() => ({})); doc = next; sha = j.content && j.content.sha; return; }
+      if (w.ok) {
+        const j = await w.json().catch(() => ({})); doc = next; sha = j.content && j.content.sha;
+        if (isUndo) lastChange = null; else { lastChange = { before: cur.doc, after: next, message }; offerUndo(message); }
+        return;
+      }
       if ((w.status === 409 || w.status === 422) && attempt === 0) continue; // changed underneath us: re-read once
       throw new GhError(why(w.status), w.status);
     }
@@ -91,7 +97,7 @@
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const ordered = () => M.orderPhotos(all, doc.order);
   function show(id) {
-    for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen", "lock", "bulktags", "bulkcoll"]) $(s).hidden = s !== id;
+    for (const s of ["setup", "list", "detail", "settings", "boot", "picker", "tagscreen", "lock", "bulktags", "bulkcoll", "reorder"]) $(s).hidden = s !== id;
     syncTop();
   }
   // The pinned top bar's height (it changes with screen and text size).
@@ -722,6 +728,135 @@
   $("bulk-place").addEventListener("click", () => {
     const n = selected.size;
     picker.open((pl) => bulkSave({ place: pl }, "list"), "list", `Location · ${n} photo${n === 1 ? "" : "s"}`);
+  });
+
+  // ---------------- undo ----------------
+  // After each save, an Undo bar for 20 s. Undo writes back exactly what the
+  // save replaced, but only if the data is still what that save wrote.
+  let undoTimer = 0;
+  function undoBar(msg, withButton, err) {
+    clearTimeout(undoTimer);
+    $("undo-msg").textContent = msg;
+    $("undo-btn").hidden = !withButton;
+    $("undo").classList.toggle("err", !!err);
+    $("undo").hidden = false;
+    undoTimer = setTimeout(() => { $("undo").hidden = true; }, withButton ? 20000 : 6000);
+  }
+  function offerUndo(message) {
+    const what = message.replace(/^Photo [\w-]+: /, "").replace(/^Tags: /, "");
+    undoBar(`Saved: ${what}`, true);
+  }
+  function refreshScreen() {
+    if (!$("detail").hidden && shown[current]) openDetail(shown[current].id);
+    else if (!$("tagscreen").hidden) renderTagScreen();
+    else if (!$("list").hidden) renderList();
+  }
+  $("undo-btn").addEventListener("click", async () => {
+    const ch = lastChange;
+    if (!ch) return;
+    $("undo-btn").disabled = true; $("undo-msg").textContent = "Undoing…";
+    try {
+      await commit((d) => {
+        if (!M.sameDoc(d, ch.after)) throw new GhError("The data changed since that save, so nothing was undone.", 0);
+        return { next: ch.before, message: `Undo: ${ch.message}` };
+      }, true);
+      undoBar("Undone · on the site in ~5 min", false);
+      refreshScreen();
+    } catch (err) { undoBar(err.message || "Couldn't undo. Try again.", false, true); }
+    finally { $("undo-btn").disabled = false; }
+  });
+
+  // ---------------- reorder ----------------
+  // Main page: the photos shown on the site, in their order (hidden ones keep
+  // their places). With a collection's filter on: that collection's order.
+  let roMode = null; // { kind: "main" } | { kind: "coll", name }
+  function roNumber() {
+    const tiles = [...$("ro-grid").children];
+    tiles.forEach((t, i) => {
+      t.querySelector(".num").textContent = String(i + 1);
+      t.querySelector(".prev").disabled = i === 0;
+      t.querySelector(".next").disabled = i === tiles.length - 1;
+      t.classList.toggle("moved", t.dataset.start !== String(i));
+    });
+    $("ro-save").disabled = !tiles.some((t, i) => t.dataset.start !== String(i));
+  }
+  function roOpen() {
+    const c = filter[0] === "c" ? doc.collections[Number(filter.slice(1))] : null;
+    roMode = c ? { kind: "coll", name: c.name } : { kind: "main" };
+    const byId = new Map(all.map((p) => [p.id, p]));
+    const list = c ? c.photos.map((id) => byId.get(id)).filter(Boolean) : ordered().filter((p) => M.isShown(doc, p));
+    $("ro-h").textContent = c ? c.name : "Main page";
+    $("ro-hint").textContent = (c ? `Order of this collection (${list.length}). ` : `Order on the main page: the ${list.length} photos shown on the site. Hidden photos keep their places. `)
+      + "Drag a photo by ⠿, or nudge it with ‹ ›. Then Save.";
+    const grid = $("ro-grid"); grid.textContent = "";
+    list.forEach((p, i) => {
+      const li = el("li", "rtile"); li.dataset.id = p.id; li.dataset.start = String(i);
+      const img = new Image(); img.loading = "lazy"; img.decoding = "async"; img.draggable = false; img.alt = doc.titles[p.id] || "";
+      img.src = thumb(p, 180);
+      const frame = el("span", "frame"); frame.appendChild(img);
+      const ctl = el("div", "rctl");
+      const prev = el("button", "prev", "‹"), next = el("button", "next", "›"), handle = el("button", "handle", "⠿");
+      prev.type = next.type = handle.type = "button";
+      prev.setAttribute("aria-label", "Move earlier"); next.setAttribute("aria-label", "Move later"); handle.setAttribute("aria-label", "Drag to move");
+      prev.addEventListener("click", () => { if (li.previousElementSibling) li.parentNode.insertBefore(li, li.previousElementSibling); roNumber(); });
+      next.addEventListener("click", () => { if (li.nextElementSibling) li.parentNode.insertBefore(li.nextElementSibling, li); roNumber(); });
+      handle.addEventListener("pointerdown", (e) => roDrag(e, li));
+      ctl.append(el("span", "num mono", ""), prev, handle, next);
+      li.append(frame, el("span", "cap" + (doc.titles[p.id] ? "" : " untitled"), doc.titles[p.id] || monthYear(p.taken)), ctl);
+      grid.appendChild(li);
+    });
+    roNumber();
+    show("reorder"); scrollTo(0, 0);
+  }
+  // Drag: the tile jumps into place as the finger passes over other tiles;
+  // the page scrolls when the finger nears the top or bottom.
+  function roDrag(e, li) {
+    e.preventDefault();
+    const grid = $("ro-grid");
+    li.classList.add("dragging");
+    let y = e.clientY, x = e.clientX, raf = 0;
+    const scroll = () => {
+      const top = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--top-h")) || 70) + 40;
+      if (y < top) scrollBy(0, -12); else if (y > innerHeight - 50) scrollBy(0, 12);
+      raf = requestAnimationFrame(scroll);
+    };
+    raf = requestAnimationFrame(scroll);
+    const move = (ev) => {
+      x = ev.clientX; y = ev.clientY;
+      const over = document.elementFromPoint(x, y);
+      const t = over && over.closest(".rtile");
+      if (!t || t === li || t.parentNode !== grid) return;
+      const tiles = [...grid.children];
+      if (tiles.indexOf(t) > tiles.indexOf(li)) grid.insertBefore(li, t.nextElementSibling); else grid.insertBefore(li, t);
+      roNumber();
+    };
+    const up = () => {
+      cancelAnimationFrame(raf);
+      li.classList.remove("dragging");
+      removeEventListener("pointermove", move); removeEventListener("pointerup", up); removeEventListener("pointercancel", up);
+      roNumber();
+    };
+    addEventListener("pointermove", move); addEventListener("pointerup", up); addEventListener("pointercancel", up);
+  }
+  $("ro-start").addEventListener("click", () => { listStatus(""); roOpen(); });
+  $("ro-cancel").addEventListener("click", () => {
+    if (!$("ro-save").disabled && !confirm("Discard the new order?")) return;
+    show("list"); renderList();
+  });
+  $("ro-save").addEventListener("click", async () => {
+    const ids = [...$("ro-grid").children].map((t) => t.dataset.id);
+    const mode = roMode;
+    $("ro-save").disabled = true; $("ro-save").textContent = "Saving…";
+    try {
+      await commit((d) => {
+        if (mode.kind === "coll") return { next: M.reorderCollection(d, mode.name, ids), message: `Reorder collection "${mode.name}"` };
+        const orderedIds = M.orderPhotos(all, d.order).map((p) => p.id);
+        return { next: M.reorderMain(d, orderedIds, ids), message: `Reorder main page (${ids.length} photos)` };
+      });
+      show("list"); renderList();
+      listStatus("New order saved · on the site in ~5 min");
+    } catch (err) { $("ro-save").disabled = false; alert(err.message || "Couldn't save. Try again."); }
+    finally { $("ro-save").textContent = "Save"; }
   });
 
   // ---------------- tag library ----------------

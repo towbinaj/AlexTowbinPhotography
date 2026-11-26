@@ -263,6 +263,26 @@
     return `${ids.length} photo${ids.length === 1 ? "" : "s"}: ${parts.join("; ") || "no change"}`;
   }
 
+  // Reorder mode. Main page: `newIds` is the new sequence of the photos that
+  // were being ordered (the shown ones); they fill the same slots in the full
+  // order, so hidden photos keep their places. `orderedIds` is the current
+  // full main order (orderPhotos). Photos not in newIds stay where they are.
+  function reorderMain(doc, orderedIds, newIds) {
+    const out = copy(doc), want = new Set(newIds), queue = newIds.filter((id) => orderedIds.includes(id));
+    out.order = orderedIds.map((id) => (want.has(id) && queue.length ? queue.shift() : id));
+    return out;
+  }
+  // Collection: its photos in the new order (any it has that newIds lacks go last).
+  function reorderCollection(doc, name, newIds) {
+    const out = copy(doc), c = out.collections.find((x) => x.name === name);
+    if (!c) return out;
+    const keep = newIds.filter((id) => c.photos.includes(id));
+    c.photos = keep.concat(c.photos.filter((id) => !keep.includes(id)));
+    return out;
+  }
+  // Undo is only safe if the data is exactly what our last save wrote.
+  const sameDoc = (a, b) => serialize(a) === serialize(b);
+
   // "Main page No." counts only photos shown on the site (what visitors see).
   // Turn shown-position n (1-based) into the 1-based position in the full
   // main order (hidden photos included) that applyChange's mainPos expects:
@@ -308,7 +328,8 @@
   }
 
   const api = { normalize, orderPhotos, collectionOf, applyChange, describe, serialize, cleanName, MAX_NAME,
-    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, mainPosFromShown };
+    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, mainPosFromShown,
+    reorderMain, reorderCollection, sameDoc };
   root.EditModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -58,7 +58,9 @@
 
   let photos = [];      // what the gallery shows (all, or one collection)
   let allPhotos = [];
-  let view = "stream";
+  // Home: staggered columns. Work: justified rows (every photo in a row the
+  // same height, widths from each photo's shape, never cropped).
+  let view = PAGE === "work" ? "rows" : "stream";
 
   // ---------------- images ----------------
   const srcset = (p) => p.src.map((s) => `${s.url} ${s.w}w`).join(", ");
@@ -209,8 +211,37 @@
 
   function columnCount() {
     const w = masonry.clientWidth;
-    if (view === "grid") return w >= 1400 ? 6 : w >= 1000 ? 5 : w >= 640 ? 4 : 3;
     return w >= 1050 ? 3 : w >= 600 ? 2 : 1;
+  }
+
+  // Justified rows: fill each row until it would be shorter than the target
+  // height; the last row keeps the target height instead of stretching.
+  function rowHeight(w) { return w >= 1400 ? 340 : w >= 1000 ? 290 : w >= 640 ? 230 : 190; }
+  function rowsLayout() {
+    const W = masonry.clientWidth, H = rowHeight(W);
+    const gap = parseFloat(getComputedStyle(masonry).columnGap) || 0;
+    masonry.className = "masonry rows";
+    cols = [];
+    const rows = [];
+    let row = [], sum = 0, prevH = H;
+    const close = (last) => {
+      const el = document.createElement("div"); el.className = "row" + (last ? " last" : "");
+      const h = last ? Math.min(H, prevH) : (W - gap * (row.length - 1)) / sum;
+      prevH = h;
+      for (const { t, r } of row) {
+        t.style.flex = last ? `0 0 ${h * r}px` : `${r} 1 0`;
+        t.querySelector("img").sizes = `${Math.ceil(h * r)}px`;
+        el.appendChild(t);
+      }
+      rows.push(el); row = []; sum = 0;
+    };
+    tiles.forEach((t, i) => {
+      const p = photos[i], r = p.w / p.h;
+      row.push({ t, r }); sum += r;
+      if ((W - gap * (row.length - 1)) / sum <= H) close(false);
+    });
+    if (row.length) close(true);
+    masonry.replaceChildren(...rows);
   }
 
   function buildTiles() {
@@ -240,6 +271,8 @@
   }
 
   function layout() {
+    if (view === "rows") return rowsLayout();
+    for (const t of tiles) t.style.flex = "";
     const n = columnCount();
     masonry.className = `masonry ${view}`;
     cols = Array.from({ length: n }, () => { const c = document.createElement("div"); c.className = "col"; return c; });
@@ -268,15 +301,6 @@
   }
   addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(parallax); } }, { passive: true });
 
-  document.querySelectorAll(".view-toggle button").forEach((b) => {
-    b.addEventListener("click", () => {
-      if (view === b.dataset.view) return;
-      view = b.dataset.view;
-      document.querySelectorAll(".view-toggle button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-      const swap = () => layout();
-      if (document.startViewTransition && !reduceMotion) transition(swap); else swap();
-    });
-  });
 
 
   // Run `fn` as a view transition. If another one interrupts it, the DOM update

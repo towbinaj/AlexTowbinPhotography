@@ -207,7 +207,7 @@ section says where it appears):
 - **Home** (`/`): your name, tagline and the highlight slideshow, then your
   highlighted photos ("Selected work"; the first few if none are marked) and
   a link to all the work.
-- **Work** (`/work/`): the full gallery with Stream / Index views and the
+- **Work** (`/work/`): the full gallery in even rows (see below) and the
   collection links. Old `/#photo-…` and `/#collection-…` links forward here.
 - **Collections** (`/collections/`): one cover per series (its first photo,
   shown whole), each opening that series on Work. The menu link appears once
@@ -221,9 +221,11 @@ and the full-screen viewer has an **Inquire** link that opens an email with
 the photo's title and link filled in.
 - **Opening screen:** your name in large serif type beside a slideshow of
   recent work, each framed print shown whole (above the name on phones).
-- **Stream view:** staggered columns that drift at slightly different speeds
+- **Home gallery:** staggered columns that drift at slightly different speeds
   as you scroll, with photos revealed as they come into view.
-- **Index view:** a dense grid of everything.
+- **Work gallery:** justified rows: every photo in a row is the same height,
+  widths follow each photo's shape (portrait, 4:3, 16:9, square), and each
+  row spans the page. Nothing is cropped; the last row isn't stretched.
 - **Opening slideshow:** photos you mark *Highlight* in the app, in your main
   page order (up to 12). With none marked, it shows the newest few photos and
   a random mix of the rest. One highlight shows as a single still image.

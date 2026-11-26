@@ -69,9 +69,11 @@ supported as a fallback, which `download_album()` picks from the token shape.
 ## Front end (`site/`)
 - **Hero:** large serif name (Instrument Serif) beside a slideshow of framed
   prints (`object-fit: contain`). On phones the print sits above the name.
-- **Stream view:** a masonry layout with per-column parallax drift and
-  clip-path reveal on scroll.
-- **Index view:** a dense grid.
+- **Home gallery (stream):** a masonry layout with per-column parallax drift
+  and clip-path reveal on scroll.
+- **Work gallery (rows):** justified rows (`rowsLayout()` in app.js): equal
+  height per row, widths from aspect ratio, no cropping; target row height
+  by width (`rowHeight()`). The old Stream/Index toggle was removed.
 - **Lightbox:** View Transitions morph from the tile, keys and swipe to
   navigate, swipe down to close, deep links `#photo-<id>`.
 - **Extras:** film grain and an Instagram

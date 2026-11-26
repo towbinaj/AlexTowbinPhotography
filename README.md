@@ -142,9 +142,9 @@ background) and opens full screen.
 - **Location:** *Choose* opens a search of the built-in places list. Pick a
   **city**, a **state/region**, or just a **country**: nothing more precise
   is ever stored or shown. Places you've used are listed first. The list is
-  [GeoNames](https://www.geonames.org/) (CC BY 4.0) cities of 15,000+ people,
-  in English ("Florence", not "Firenze"); for a smaller town choose its
-  state/region. *Photo GPS* separately says whether the image file itself
+  [GeoNames](https://www.geonames.org/) (CC BY 4.0): towns of 1,000+ people
+  plus inhabited islands ("Santorini Island", "Milos Island"); for a smaller
+  place choose its state/region. *Photo GPS* separately says whether the image file itself
   kept its location (yes/no only).
 - **Search** (top of the grid) by title, place, tag or collection; filters
   include *Shown* (on the site), *Hidden*, *Untitled* and *No location*.

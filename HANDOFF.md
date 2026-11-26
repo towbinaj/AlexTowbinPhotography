@@ -153,8 +153,10 @@ Site `#edit` now preserves unknown fields when saving. **Merged 2026-11-18.**
 
 **Tags + locations + site search (branch, 2026-11-18):** owner asked for a
 tag library and standardized locations at city/state/country level only.
-Owner chose the **built-in city list** (GeoNames cities15000 + admin1 +
-countries → `site/edit/places.json`, ~1.1 MB, lazy-loaded by the app; made
+Owner chose the **built-in city list** (GeoNames cities1000 + inhabited
+islands (1,000+ people, streamed from allCountries; added 2026-11-26 for
+Santorini/Milos) + admin1 + countries → `site/edit/places.json`, ~5.6 MB
+(~2.5 MB gzipped), lazy-loaded by the app; made
 by `scripts/make_places.py`; `download.geonames.org` was added to the cloud
 environment for this) and **showing both on the site with search**. Data:
 `tags` (library), `photo_tags` {id: [names from library]}, `locations`

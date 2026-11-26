@@ -505,7 +505,7 @@
       const li = el("li"), b = el("button");
       b.type = "button";
       b.append(el("span", "", Meta.placeLabel(pl)),
-        el("span", "sub mono", pl.level === "city" ? ["City", pl.region, pl.country].filter(Boolean).join(" · ") : pl.level === "region" ? `State / region · ${pl.country}` : "Country"));
+        el("span", "sub mono", pl.level === "city" ? ["Town / island", pl.region, pl.country].filter(Boolean).join(" · ") : pl.level === "region" ? `State / region · ${pl.country}` : "Country"));
       b.addEventListener("click", () => onPick(pl));
       li.appendChild(b);
       return li;

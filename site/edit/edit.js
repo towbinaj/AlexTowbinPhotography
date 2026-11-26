@@ -96,11 +96,11 @@
   }
   // The pinned top bar's height (it changes with screen and text size).
   function syncTop() {
-    const t = document.querySelector(".screen:not([hidden]) > .top");
+    const t = document.querySelector(".screen:not([hidden]) > .pinned, .screen:not([hidden]) > .top");
     if (t && t.offsetHeight) document.documentElement.style.setProperty("--top-h", t.offsetHeight + "px");
   }
   addEventListener("resize", syncTop);
-  if (window.ResizeObserver) { const ro = new ResizeObserver(syncTop); document.querySelectorAll(".top").forEach((t) => ro.observe(t)); }
+  if (window.ResizeObserver) { const ro = new ResizeObserver(syncTop); document.querySelectorAll(".top, .pinned").forEach((t) => ro.observe(t)); }
   const Meta = window.PhotoMeta;
   const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 

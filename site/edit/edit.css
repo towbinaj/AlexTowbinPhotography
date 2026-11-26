@@ -108,7 +108,16 @@ input:disabled { opacity: .4; }
 
 /* ---------- setup / settings ---------- */
 .setup { min-height: 100vh; display: grid; place-items: center; padding: calc(24px + env(safe-area-inset-top)) var(--pad) 24px; }
-.screen:has(> .top) { padding-top: var(--top-h, calc(65px + env(safe-area-inset-top))); }
+.screen:has(> .top), .screen:has(> .pinned) { padding-top: var(--top-h, calc(65px + env(safe-area-inset-top))); }
+/* Grid screen: top bar + search + Publish + filters pinned together. */
+.pinned {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+  padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);
+  background: rgba(11, 11, 10, .96); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.pinned > .top { position: static; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom: 0; padding-left: var(--pad); padding-right: var(--pad); }
+.pinned .chips { padding-bottom: 10px; }
 .card { width: 100%; max-width: 460px; display: grid; gap: 12px; }
 .card p { margin: 0; color: var(--muted); }
 .eyebrow { color: var(--accent) !important; }

@@ -172,6 +172,15 @@ the gallery (hidden until a collection exists), `#collection-<slug>` deep
 links, heading becomes the collection name, lightbox steps within it. Built
 from live data, baked fallback in `config.json` `collections`
 (`load_collections()`). `#edit` forces *All* (positions are global).
+**On Work page (opt-in, 2026-11-26):** `on_work`/`off_work` in curation.json,
+`onWork()` in meta.js = `on_work()` in build.py (parity test); photos added
+after `WORK_FROM` start off Work. Work's All list = shown + on Work;
+collections/highlights use all shown photos; a `#photo-` link to an
+off-Work photo opens its collection. Build bakes `off_work: true` as the
+fallback. Editor: checkmark + note on the photo screen, *Not on Work*
+filter, *On/Off Work* bulk button, Order and Work page No. count only
+photos on Work.
+
 **Highlights:** the hero slideshow and Home grid show highlighted photos in
 the highlights' own order (`highlights` array; editor ★ filter → Order,
 `reorderHighlights()`; newly starred go last). Was main page order until 2026-11-26 (max 12; live data, baked fallback `config.json` `highlights`,

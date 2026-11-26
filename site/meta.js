@@ -78,7 +78,26 @@
     return !(vis.from !== null && Number.isFinite(t) && t >= vis.from);
   }
 
-  const api = { cleanTag, cleanPlace, placeLabel, placeKey, MAX_TAG, visibility, isShown };
+  // On the Work page? (kept identical to work()/on_work() in build.py)
+  //   on_work: [ids]   checked in the editor
+  //   off_work: [ids]  unchecked in the editor
+  // Otherwise: photos added to the album before WORK_FROM are on Work (the
+  // photos there when this began); photos added later start off it.
+  // A photo off Work can still be in a collection, a highlight or shared.
+  const WORK_FROM = Date.parse("2026-11-26T18:30:00Z");
+  function work(data) {
+    const d = isObj(data) ? data : {};
+    const ids = (v) => new Set(Array.isArray(v) ? v.slice(0, 5000).filter((x) => typeof x === "string" && x.length > 0 && x.length <= 64) : []);
+    return { on: ids(d.on_work), off: ids(d.off_work) };
+  }
+  function onWork(id, added, w) {
+    if (w.off.has(id)) return false;
+    if (w.on.has(id)) return true;
+    const t = typeof added === "string" && ISO.test(added) ? Date.parse(added) : NaN;
+    return !(Number.isFinite(t) && t >= WORK_FROM);
+  }
+
+  const api = { cleanTag, cleanPlace, placeLabel, placeKey, MAX_TAG, visibility, isShown, work, onWork };
   root.PhotoMeta = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

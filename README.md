@@ -148,6 +148,11 @@ background) and opens full screen.
   kept its location (yes/no only).
 - **Search** (top of the grid) by title, place, tag or collection; filters
   include *Shown* (on the site), *Hidden*, *Untitled* and *No location*.
+- **On Work page:** a checkmark on each photo. Photos added to the album from
+  now on start **unchecked**: they appear in their collection (and on Home if
+  you ★ them) but not in the Work page's full list until you tick **On Work
+  page** (or select several and tap **On Work**). Photos that were already
+  on the site stay on Work. The *Not on Work* filter lists the rest.
 - **Show on site:** photos you add to the album from now on **start hidden**
   (the grid marks them *Hidden · not on the site*; the *Hidden* filter lists
   them). Open one and tick **Show on site**, or select several and tap
@@ -178,6 +183,8 @@ background) and opens full screen.
   - **★ Highlight:** star all of them for the Home page (new ones go last in
     the highlights order; already starred ones keep their place); if they're
     all starred already, the button reads **★ Remove** and un-stars them.
+  - **On Work / Off Work:** put all of them on the Work page; if they're all
+    on it already, the button reads **Off Work** and takes them off.
   - **Show / Hide:** release or pull back all of them.
   Each is one save.
 - **Face ID lock:** when you first connect, *Lock the editor with Face ID*

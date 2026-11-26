@@ -10,7 +10,9 @@
 //     "locations":   { "<id>": place },                  // see site/meta.js (city/region/country)
 //     "hidden":      ["<id>", …],                        // pulled back: not on the site
 //     "published":   ["<id>", …],                        // released (overrides drafts_from)
-//     "drafts_from": "2026-11-18T16:45:00Z"              // photos added after this start hidden
+//     "drafts_from": "2026-11-18T16:45:00Z",             // photos added after this start hidden
+//     "on_work":     ["<id>", …],                        // checked "On Work page"
+//     "off_work":    ["<id>", …]                         // unchecked (new photos start off: meta.js)
 //   }
 // Everything read from the repo is untrusted and goes through normalize().
 (function (root) {
@@ -86,13 +88,15 @@
     }
     const vis = Meta.visibility(d);
     const out = { titles, order: idList(d.order), collections, highlights: idList(d.highlights), tags, photo_tags, locations,
-      hidden: idList(d.hidden), published: idList(d.published) };
+      hidden: idList(d.hidden), published: idList(d.published), on_work: idList(d.on_work), off_work: idList(d.off_work) };
     if (vis.from !== null) out.drafts_from = d.drafts_from;
     return out;
   }
 
   // Is this photo shown on the site? (same rule as the site and the build)
   const isShown = (doc, p) => Meta.isShown(p.id, p.added, Meta.visibility(doc));
+  // Is it in the Work page's list? (the "On Work page" checkmark)
+  const onWork = (doc, p) => Meta.onWork(p.id, p.added, Meta.work(doc));
 
   const copy = (doc) => ({
     titles: { ...doc.titles },
@@ -104,6 +108,8 @@
     locations: { ...doc.locations },
     hidden: doc.hidden.slice(),
     published: doc.published.slice(),
+    on_work: doc.on_work.slice(),
+    off_work: doc.off_work.slice(),
     ...(doc.drafts_from ? { drafts_from: doc.drafts_from } : {}),
   });
 
@@ -222,6 +228,12 @@
       out.published = out.published.filter((x) => x !== id);
       (change.shown ? out.published : out.hidden).push(id);
     }
+    if (has(change, "work")) {
+      // Explicit either way, so it overrides the new-photos-start-off rule.
+      out.on_work = out.on_work.filter((x) => x !== id);
+      out.off_work = out.off_work.filter((x) => x !== id);
+      (change.work ? out.on_work : out.off_work).push(id);
+    }
     if (change.mainPos != null && Array.isArray(change.mainIds)) {
       const ids = change.mainIds.filter((x) => x !== id);
       ids.splice(clampPos(change.mainPos, ids.length + 1) - 1, 0, id);
@@ -248,6 +260,7 @@
       if (has(op, "place")) change.place = op.place;
       if (has(op, "shown")) change.shown = !!op.shown;
       if (has(op, "highlight")) change.highlight = !!op.highlight;
+      if (has(op, "work")) change.work = !!op.work;
       out = applyChange(out, change, cleanTitle);
     }
     return out;
@@ -261,6 +274,7 @@
     if (has(op, "place")) parts.push(op.place ? `location ${Meta.placeLabel(op.place)}` : "location removed");
     if (has(op, "shown")) parts.push(op.shown ? "shown on site" : "hidden from site");
     if (has(op, "highlight")) parts.push(op.highlight ? "highlighted" : "highlight removed");
+    if (has(op, "work")) parts.push(op.work ? "on Work page" : "off Work page");
     return `${ids.length} photo${ids.length === 1 ? "" : "s"}: ${parts.join("; ") || "no change"}`;
   }
 
@@ -320,6 +334,9 @@
     const s0 = before.published.includes(id) ? 1 : before.hidden.includes(id) ? -1 : 0;
     const s1 = after.published.includes(id) ? 1 : after.hidden.includes(id) ? -1 : 0;
     if (s0 !== s1 && s1) parts.push(s1 > 0 ? "shown on site" : "hidden from site");
+    const w0 = before.on_work.includes(id) ? 1 : before.off_work.includes(id) ? -1 : 0;
+    const w1 = after.on_work.includes(id) ? 1 : after.off_work.includes(id) ? -1 : 0;
+    if (w0 !== w1 && w1) parts.push(w1 > 0 ? "on Work page" : "off Work page");
     const o0 = before.order.indexOf(id), o1 = after.order.indexOf(id);
     if (o0 !== o1 || before.order.length !== after.order.length) parts.push(`Work page #${o1 + 1}`);
     return `Photo ${id}: ${parts.join(", ") || "no change"}`;
@@ -331,11 +348,12 @@
     const sortKeys = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
     return JSON.stringify({ titles, order: doc.order, collections: doc.collections, highlights: doc.highlights,
       tags: doc.tags, photo_tags: sortKeys(doc.photo_tags), locations: sortKeys(doc.locations),
-      hidden: doc.hidden, published: doc.published, ...(doc.drafts_from ? { drafts_from: doc.drafts_from } : {}) }, null, 2) + "\n";
+      hidden: doc.hidden, published: doc.published, ...(doc.drafts_from ? { drafts_from: doc.drafts_from } : {}),
+      ...(doc.on_work.length ? { on_work: doc.on_work } : {}), ...(doc.off_work.length ? { off_work: doc.off_work } : {}) }, null, 2) + "\n";
   }
 
   const api = { normalize, orderPhotos, collectionOf, applyChange, describe, serialize, cleanName, MAX_NAME,
-    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, mainPosFromShown,
+    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, onWork, mainPosFromShown,
     reorderMain, reorderCollection, reorderHighlights, sameDoc };
   root.EditModel = api;
   if (typeof module !== "undefined") module.exports = api;

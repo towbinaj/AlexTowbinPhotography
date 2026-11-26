@@ -356,7 +356,7 @@ def test_model_normalize_rejects_junk():
                  "collections": [{"name": "Chicago at Night", "photos": ["a", "b"]},
                                  {"name": "Other", "photos": ["d"]}],
                  "highlights": ["a"], "tags": [], "photo_tags": {}, "locations": {},
-                 "hidden": [], "published": []}
+                 "hidden": [], "published": [], "on_work": [], "off_work": []}
 
 
 def test_model_apply_change_moves_between_collections_and_reorders():
@@ -522,6 +522,56 @@ def test_model_bulk_tags_collection_and_place():
     assert colls2 == [{"name": "Series", "photos": ["c", "b"]}] and locs2 == ["b"]
     assert msg == '3 photos: tags +Night; collection "Series"; location Florence, Italy'
     assert orig == {"a": ["Street"], "b": ["Night"]}
+
+
+# ---- on the Work page: on_work / off_work / new photos start off (site/meta.js <-> build.py) ----
+
+WORK_DATA = {"on_work": ["new-on", "both"], "off_work": ["old-off", "both"]}
+WORK_CASES = [  # (id, added)
+    ("old", "2026-11-01T10:00:00Z"), ("old-off", "2026-11-01T10:00:00Z"), ("new", "2026-11-26T18:30:00Z"),
+    ("new-on", "2026-12-01T00:00:00Z"), ("both", "2026-12-01T00:00:00Z"), ("just-before", "2026-11-26T18:29:59Z"),
+    ("noadded", ""), ("junk", "yesterday"), ("offset", "2026-11-26T13:30:00-05:00"),
+]
+
+
+def test_on_work_matches_js_and_rules(tmp_path):
+    import shutil, subprocess
+    cur = tmp_path / "curation.json"
+    cur.write_text(json.dumps(WORK_DATA))
+    w = build.work(cur)
+    py = [build.on_work(i, a, w) for i, a in WORK_CASES]
+    assert dict(zip([i for i, _ in WORK_CASES], py)) == {
+        "old": True, "old-off": False, "new": False, "new-on": True, "both": False, "just-before": True,
+        "noadded": True, "junk": True, "offset": False}
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"on_work": "x", "off_work": [1]}))
+    assert [build.on_work(i, a, build.work(bad)) for i, a in WORK_CASES][:2] == [True, True]
+    node = shutil.which("node")
+    if not node:
+        return
+    root = Path(__file__).resolve().parent.parent
+    script = ("require(process.argv[1]);const M=require(process.argv[2]);const [d,c]=JSON.parse(process.argv[3]);"
+              "const w=M.work(d);process.stdout.write(JSON.stringify(c.map(([i,a])=>M.onWork(i,a,w))));")
+    out = subprocess.run([node, "-e", script, str(root / "site" / "titlecase.js"), str(root / "site" / "meta.js"),
+                          json.dumps([WORK_DATA, WORK_CASES])], capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == py
+
+
+def test_model_work_checkmark():
+    script = """
+    let d = M.normalize({}, cleanTitle);
+    const p = {id:'n', added:'2026-12-01T00:00:00Z'}, q = {id:'o', added:'2026-01-01T00:00:00Z'};
+    const before = [M.onWork(d, p), M.onWork(d, q)];
+    const on = M.applyChange(d, {id:'n', work:true}, cleanTitle);
+    const off = M.applyBulk(on, ['n','o'], {work:false}, cleanTitle);
+    process.stdout.write(JSON.stringify([before, M.onWork(on, p), on.on_work, off.on_work, off.off_work,
+      [M.onWork(off, p), M.onWork(off, q)], M.describe(d, on, 'n'), M.describeBulk(['n','o'], {work:false}),
+      JSON.parse(M.serialize(d)).on_work === undefined]));
+    """
+    before, on_p, on_list, off_on, off_off, after, msg, bmsg, no_key = _node_model(script)
+    assert before == [False, True] and on_p is True and on_list == ["n"]
+    assert off_on == [] and off_off == ["n", "o"] and after == [False, False]
+    assert msg == "Photo n: on Work page" and bmsg == "2 photos: off Work page" and no_key
 
 
 # ---- show on site: hidden / published / drafts_from (site/meta.js <-> build.py) ----

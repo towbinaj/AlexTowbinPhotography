@@ -77,6 +77,7 @@
       <button type="button" class="btn ghost small" id="bulk-coll" disabled>Collection</button>
       <button type="button" class="btn ghost small" id="bulk-place" disabled>Location</button>
       <button type="button" class="btn ghost small" id="bulk-high" disabled>★ Highlight</button>
+      <button type="button" class="btn ghost small" id="bulk-work" disabled>On Work</button>
       <button type="button" class="btn ghost small" id="bulk-show" disabled>Show</button>
       <button type="button" class="btn ghost small" id="bulk-hide" disabled>Hide</button>
     </div>
@@ -173,9 +174,13 @@
         </div>
       </div>
       <div class="row">
-        <label class="toggle grow"><input id="f-high" type="checkbox"> <span>Highlight (Home page)</span></label>
+        <label class="toggle grow"><input id="f-work" type="checkbox"> <span>On Work page</span></label>
         <label class="field narrow"><span class="mono">Work page No.</span>
           <span class="num"><input id="f-mpos" type="number" inputmode="numeric" min="1" step="1"><span class="mono of" id="f-mpos-of"></span></span></label>
+      </div>
+      <p class="mono hint" id="f-work-note"></p>
+      <div class="row">
+        <label class="toggle grow"><input id="f-high" type="checkbox"> <span>Highlight (Home page)</span></label>
       </div>
       <dl class="facts mono">
         <div><dt>Taken</dt><dd id="f-taken"></dd></div>

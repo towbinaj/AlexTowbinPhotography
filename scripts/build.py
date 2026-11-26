@@ -789,6 +789,30 @@ def is_shown(pid: str, added: str, vis: dict) -> bool:
     return not (vis["from"] is not None and t is not None and t >= vis["from"])
 
 
+# ---- on the Work page (kept identical to work()/onWork() in site/meta.js) ----
+WORK_FROM = _iso_time("2026-11-26T18:30:00Z")
+
+
+def work(path: Path = CURATION) -> dict:
+    """on_work / off_work id sets from curation.json (the editor's Work page checkmark)."""
+    data = _read_json(path)
+    d = data if isinstance(data, dict) else {}
+
+    def ids(v):
+        return {x for x in (v[:MAX_ORDER] if isinstance(v, list) else []) if isinstance(x, str) and 0 < len(x) <= MAX_ID}
+    return {"on": ids(d.get("on_work")), "off": ids(d.get("off_work"))}
+
+
+def on_work(pid: str, added: str, w: dict) -> bool:
+    """Unchecked -> off; checked -> on; added at/after WORK_FROM -> off (opt-in); else on."""
+    if pid in w["off"]:
+        return False
+    if pid in w["on"]:
+        return True
+    t = _iso_time(added)
+    return not (t is not None and t >= WORK_FROM)
+
+
 def apply_meta(entries: list[dict], tags: dict[str, list[str]], places: dict[str, dict]) -> None:
     for e in entries:
         if tags.get(e["id"]):
@@ -1024,9 +1048,12 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
     # Hidden photos stay in photos.json (the editor shows them, and releasing
     # one is instant) but are flagged, left out of the JSON-LD and never used
     # for the link preview. Not private: see README.
+    wk = work()
     for e in entries:
         if not is_shown(e["id"], e.get("added", ""), vis):
             e["draft"] = True
+        if not on_work(e["id"], e.get("added", ""), wk):
+            e["off_work"] = True  # fallback for the site when the live data can't be read
     shown = [e for e in entries if not e.get("draft")]
     og_sizes = {e["id"]: e.pop("_og") for e in entries if "_og" in e}
     for e in entries:

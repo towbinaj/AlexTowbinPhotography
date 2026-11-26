@@ -75,10 +75,17 @@
     const mainIds = M.orderPhotos(all, d.order).map((p) => p.id);
     const c = { ...change, mainIds };
     if (c.shownPos != null) {
-      // Main page No. is among shown photos; convert using the latest data
-      // (and this change's own Show on site, if it has one).
+      // Work page No. is among the photos visitors see on Work (shown and
+      // checked "On Work page"); convert using the latest data and this
+      // change's own Show on site / On Work page, if it has them.
       const byId = new Map(all.map((p) => [p.id, p]));
-      const isShownId = (x) => (x === change.id && "shown" in change ? change.shown : !!byId.get(x) && M.isShown(d, byId.get(x)));
+      const isShownId = (x) => {
+        const p = byId.get(x);
+        if (!p) return false;
+        const sh = x === change.id && "shown" in change ? change.shown : M.isShown(d, p);
+        const wk = x === change.id && "work" in change ? change.work : M.onWork(d, p);
+        return sh && wk;
+      };
       c.mainPos = M.mainPosFromShown(mainIds, isShownId, change.id, c.shownPos);
       delete c.shownPos;
     }
@@ -134,7 +141,8 @@
     const loose = all.filter((p) => !M.collectionOf(doc, p.id)).length;
     const noPlace = all.filter((p) => !doc.locations[p.id]).length;
     const hiddenN = all.filter((p) => !M.isShown(doc, p)).length;
-    const out = [["all", `All ${all.length}`], ["shown", `Shown ${all.length - hiddenN}`], ["hidden", `Hidden ${hiddenN}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
+    const offWork = all.filter((p) => !M.onWork(doc, p)).length;
+    const out = [["all", `All ${all.length}`], ["shown", `Shown ${all.length - hiddenN}`], ["hidden", `Hidden ${hiddenN}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["offwork", `Not on Work ${offWork}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
     doc.collections.forEach((c, i) => out.push(["c" + i, `${c.name} ${c.photos.filter((id) => all.some((p) => p.id === id)).length}`]));
     return out;
   }
@@ -156,6 +164,7 @@
     if (f === "noplace") return list.filter((p) => !doc.locations[p.id]);
     if (f === "hidden") return list.filter((p) => !M.isShown(doc, p));
     if (f === "shown") return list.filter((p) => M.isShown(doc, p));
+    if (f === "offwork") return list.filter((p) => !M.onWork(doc, p));
     if (f === "high") { const byId = new Map(list.map((p) => [p.id, p])); return doc.highlights.map((id) => byId.get(id)).filter(Boolean); }
     if (f === "none") return list.filter((p) => !M.collectionOf(doc, p.id));
     if (f[0] === "c") {
@@ -204,6 +213,7 @@
       const meta2 = el("span", "meta mono", [pl ? Meta.placeLabel(pl) : "", tg.length ? `${tg.length} tag${tg.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ") || "No location");
       a.append(frame, cap, meta, meta2);
       if (hiddenNow) a.appendChild(el("span", "meta mono hid", "Hidden · not on the site"));
+      else if (!M.onWork(doc, p)) a.appendChild(el("span", "meta mono hid", "Not on Work page"));
       a.setAttribute("aria-label", (title || "Untitled photo") + (c ? `, ${c.name} number ${c.pos}` : "") + (star ? ", highlighted" : ""));
       grid.appendChild(a);
     });
@@ -219,7 +229,7 @@
   let pendingTags = [], pendingPlace = null;
   function values() {
     const coll = $("f-coll").value === NEW ? M.cleanName($("f-newcoll").value, clean) : $("f-coll").value;
-    return { title: clean($("f-title").value), collection: coll, cpos: $("f-cpos").value, high: $("f-high").checked, mpos: $("f-mpos").value, shown: $("f-shown").checked,
+    return { title: clean($("f-title").value), collection: coll, cpos: $("f-cpos").value, high: $("f-high").checked, mpos: $("f-mpos").value, shown: $("f-shown").checked, work: $("f-work").checked,
       tags: pendingTags.join("\n"), place: Meta.placeKey(pendingPlace) };
   }
   function dirty() { const v = values(); return !!base && Object.keys(v).some((k) => String(v[k]) !== String(base[k])); }
@@ -260,12 +270,13 @@
     fillCollPos();
     $("f-high").checked = doc.highlights.includes(p.id);
     $("f-shown").checked = M.isShown(doc, p);
+    $("f-work").checked = M.onWork(doc, p);
     shownNote();
     pendingTags = (doc.photo_tags[p.id] || []).slice();
     pendingPlace = doc.locations[p.id] || null;
     $("f-tag-in").value = "";
     renderTags(); renderPlace();
-    fillMainPos(p, M.isShown(doc, p));
+    fillMainPos(p, M.isShown(doc, p), M.onWork(doc, p));
     $("f-taken").textContent = longDate(p.taken);
     $("f-added").textContent = longDate(p.added);
     const loc = $("f-loc");
@@ -302,6 +313,7 @@
     }
     if (v.high !== base.high) change.highlight = v.high;
     if (v.shown !== base.shown) change.shown = v.shown;
+    if (v.work !== base.work) change.work = v.work;
     if (v.tags !== base.tags) change.tags = pendingTags.slice();
     if (v.place !== base.place) change.place = pendingPlace;
     if (String(v.mpos) !== String(base.mpos) && v.mpos !== "") {
@@ -337,21 +349,30 @@
   $("f-shown").addEventListener("change", () => {
     shownNote();
     const p = shown[current];
-    if (p) fillMainPos(p, $("f-shown").checked, true);
+    if (p) fillMainPos(p, $("f-shown").checked, $("f-work").checked, true);
     refreshSave();
   });
-  // Main page No.: position among the photos shown on the site (what visitors
-  // see), not among all photos. Hidden photos have none.
-  function fillMainPos(p, willShow, keepTyped) {
+  $("f-work").addEventListener("change", () => {
+    const p = shown[current];
+    if (p) fillMainPos(p, $("f-shown").checked, $("f-work").checked, true);
+    refreshSave();
+  });
+  // Work page No.: position among the photos visitors see on Work (shown on
+  // the site and checked "On Work page"), not among all photos.
+  function fillMainPos(p, willShow, onWorkNow, keepTyped) {
     const list = ordered();
-    const shownList = list.filter((x) => x.id !== p.id && M.isShown(doc, x));
+    const vis = (x) => M.isShown(doc, x) && M.onWork(doc, x);
+    const shownList = list.filter((x) => x.id !== p.id && vis(x));
     const inp = $("f-mpos");
-    if (!willShow) {
+    const c = M.collectionOf(doc, p.id);
+    $("f-work-note").hidden = onWorkNow;
+    $("f-work-note").textContent = onWorkNow ? "" : c ? `Visitors see it in “${c.name}”.` : "Not in a collection, so visitors only see it as a highlight or by its link.";
+    if (!willShow || !onWorkNow) {
       inp.disabled = true; inp.value = ""; inp.max = 1;
-      $("f-mpos-of").textContent = "hidden";
+      $("f-mpos-of").textContent = willShow ? "off" : "hidden";
       return;
     }
-    const before = list.slice(0, list.findIndex((x) => x.id === p.id)).filter((x) => M.isShown(doc, x)).length;
+    const before = list.slice(0, list.findIndex((x) => x.id === p.id)).filter(vis).length;
     inp.disabled = false;
     inp.max = shownList.length + 1;
     if (!keepTyped || !inp.value) inp.value = before + 1;
@@ -598,7 +619,9 @@
   function selUpdate() {
     const n = selected.size;
     $("sel-count").textContent = n ? `${n} selected` : "Tap photos";
-    for (const id of ["bulk-tags", "bulk-coll", "bulk-place", "bulk-high", "bulk-show", "bulk-hide"]) $(id).disabled = !n;
+    for (const id of ["bulk-tags", "bulk-coll", "bulk-place", "bulk-high", "bulk-work", "bulk-show", "bulk-hide"]) $(id).disabled = !n;
+    const byId = new Map(all.map((p) => [p.id, p]));
+    $("bulk-work").textContent = n && [...selected].every((id) => byId.get(id) && M.onWork(doc, byId.get(id))) ? "Off Work" : "On Work";
     $("bulk-high").textContent = n && [...selected].every((id) => doc.highlights.includes(id)) ? "★ Remove" : "★ Highlight";
     $("sel-all").textContent = shown.length && shown.every((p) => selected.has(p.id)) ? "Select none" : "Select all";
   }
@@ -723,6 +746,12 @@
     const on = ![...selected].every((id) => doc.highlights.includes(id));
     listStatus("Saving…"); bulkSave({ highlight: on }, "list");
   });
+  // Put all selected on the Work page; if they're all on it already, take them off.
+  $("bulk-work").addEventListener("click", () => {
+    const byId = new Map(all.map((p) => [p.id, p]));
+    const on = ![...selected].every((id) => byId.get(id) && M.onWork(doc, byId.get(id)));
+    listStatus("Saving…"); bulkSave({ work: on }, "list");
+  });
   $("bulk-show").addEventListener("click", () => { listStatus("Saving…"); bulkSave({ shown: true }, "list"); });
   $("bulk-hide").addEventListener("click", () => { listStatus("Saving…"); bulkSave({ shown: false }, "list"); });
   $("bulk-place").addEventListener("click", () => {
@@ -788,11 +817,11 @@
     const byId = new Map(all.map((p) => [p.id, p]));
     const list = c ? c.photos.map((id) => byId.get(id)).filter(Boolean)
       : high ? doc.highlights.map((id) => byId.get(id)).filter(Boolean)
-      : ordered().filter((p) => M.isShown(doc, p));
+      : ordered().filter((p) => M.isShown(doc, p) && M.onWork(doc, p));
     $("ro-h").textContent = c ? c.name : high ? "★ Highlights" : "Work page";
     $("ro-hint").textContent = (c ? `Order of this collection (${list.length}). `
       : high ? `Order of the ${list.length} highlights on the Home page and in its slideshow. `
-      : `Order on the Work page: the ${list.length} photos shown on the site. Hidden photos keep their places. `)
+      : `Order on the Work page: the ${list.length} photos on it. Hidden photos and ones not on Work keep their places. `)
       + "Drag a photo by ⠿, or nudge it with ‹ ›. Then Save.";
     const grid = $("ro-grid"); grid.textContent = "";
     list.forEach((p, i) => {

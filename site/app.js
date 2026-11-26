@@ -57,7 +57,8 @@
   }
 
   let photos = [];      // what the gallery shows (all, or one collection)
-  let allPhotos = [];
+  let allPhotos = [];  // every photo shown on the site (collections, highlights, share pages)
+  let workPhotos = []; // the ones checked "On Work page" in the editor
   // Home: staggered columns. Work: justified rows (every photo in a row the
   // same height, widths from each photo's shape, never cropped).
   let view = PAGE === "work" ? "rows" : "stream";
@@ -166,9 +167,9 @@
   }
   function hero(highlights) {
     const media = $("hero-media");
-    $("hero-count").textContent = `${pad2(allPhotos.length)} photographs`;
-    const rest = allPhotos.slice(3).sort(() => Math.random() - 0.5);
-    const picks = highlights.length ? highlights : allPhotos.slice(0, 3).concat(rest).slice(0, 6);
+    $("hero-count").textContent = `${pad2(workPhotos.length)} photographs`;
+    const rest = workPhotos.slice(3).sort(() => Math.random() - 0.5);
+    const picks = highlights.length ? highlights : workPhotos.slice(0, 3).concat(rest).slice(0, 6);
     const slides = picks.map((p, i) => {
       const s = document.createElement("div"); s.className = "slide";
       s.appendChild(makeImg(p, "(max-width: 860px) 100vw, 45vw", i === 0));
@@ -554,7 +555,7 @@
         b.addEventListener("click", () => api.select(slug, true));
         nav.appendChild(b);
       };
-      add("All", null, allPhotos.length);
+      add("All", null, workPhotos.length);
       for (const c of list) add(c.name, c.slug, c.items.length);
     }
     const api = {
@@ -566,9 +567,9 @@
       },
       select(slug, scroll) {
         const c = list.find((x) => x.slug === slug) || null;
-        if ((c ? c.slug : null) === active && photos === (c ? c.items : allPhotos)) return;
+        if ((c ? c.slug : null) === active && photos === (c ? c.items : workPhotos)) return;
         active = c ? c.slug : null;
-        photos = c ? c.items : allPhotos;
+        photos = c ? c.items : workPhotos;
         if (c) counter.event(`collection/${c.slug}`, c.name);
         title.replaceChildren(...(c ? [document.createTextNode(c.name)] : allTitle.map((n) => n.cloneNode(true))));
         tiles.length = 0;
@@ -632,19 +633,26 @@
     const listed = Array.isArray(list) ? applyLive(list, live) : [];
     // Image paths in photos.json are relative to the site root.
     for (const p of listed) for (const s of p.src || []) if (!/^(https?:|\/)/.test(s.url)) s.url = ROOT + s.url;
-    allPhotos = photos = listed.filter((p) => (vis ? window.PhotoMeta.isShown(p.id, p.added, vis) : !p.draft));
+    allPhotos = listed.filter((p) => (vis ? window.PhotoMeta.isShown(p.id, p.added, vis) : !p.draft));
+    // The Work page's "All" list: only photos checked "On Work page" (live
+    // rule, else the flag baked in at build). The rest still appear in their
+    // collection, as highlights and on their share pages.
+    const wk = isObj(live) ? window.PhotoMeta.work(live) : null;
+    workPhotos = photos = allPhotos.filter((p) => (wk ? window.PhotoMeta.onWork(p.id, p.added, wk) : !p.off_work));
     const collections = groups.parse(rawCollections);
     $("nav-collections").hidden = !collections.length;
     if (PAGE === "collections") { renderCollections(collections); return; }
     if (PAGE === "about") return;
-    if (!allPhotos.length) { $("empty").hidden = false; $("hero-media").hidden = true; return; }
     const highlights = highlightsFrom(rawHighlights);
+    if (!workPhotos.length && !(PAGE === "home" && highlights.length) && !(PAGE === "work" && collections.length)) {
+      $("empty").hidden = false; $("hero-media").hidden = true; return;
+    }
     if (PAGE === "home") {
       // Home: the intro, the slideshow, and the highlighted photos (or, with
       // none marked yet, the first few), with a link to all the work.
       hero(highlights);
-      photos = highlights.length ? highlights : allPhotos.slice(0, 9);
-      const more = `View all ${allPhotos.length} photographs →`;
+      photos = highlights.length ? highlights : workPhotos.slice(0, 9);
+      const more = `View all ${workPhotos.length} photographs →`;
       $("view-all").textContent = "View all work →"; $("view-all-2").textContent = more;
     }
     buildTiles();
@@ -653,7 +661,14 @@
     if (PAGE === "work") {
       groups.init(rawCollections);
       const m = location.hash.match(/^#photo-(.+)$/);
-      if (m) openPhoto(photos.findIndex((p) => p.id === m[1]), null);
+      if (m) {
+        // A photo that's only in a collection opens within that collection.
+        if (!photos.some((p) => p.id === m[1])) {
+          const c = collections.find((x) => x.items.some((p) => p.id === m[1]));
+          if (c) groups.select(c.slug, false);
+        }
+        openPhoto(photos.findIndex((p) => p.id === m[1]), null);
+      }
     }
   });
 })();

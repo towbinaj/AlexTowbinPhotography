@@ -44,7 +44,7 @@ owner's iCloud shared album, processes them, and builds a static site into
   (site repo only, Actions: read and write) powers the app's *Publish now*
   (workflow_dispatch); keys can't have per-repo permissions, so never merge
   the two. Saves write `curation.json`
-  (`{titles, order, collections, highlights, tags, photo_tags, locations}`) there via the GitHub API; the page reads it live from
+  (`{titles, order, collections, highlights, tags, photo_tags, locations, on_work, off_work}`) there via the GitHub API; the page reads it live from
   raw.githubusercontent.com and the build bakes it in (CI checks it out into
   `data/`). Treat it as untrusted input (validate, render as text only). Unplaced (new) photos sort first. Titles are optional: untitled photos show the date. Apple
   captions/comments are not reachable through the public album link (tested).
@@ -56,6 +56,11 @@ owner's iCloud shared album, processes them, and builds a static site into
   unlisted, not private (owner chose instant release over privacy): still in
   photos.json with `draft: true`, but left out of the gallery, JSON-LD and
   og image. Rule in `site/meta.js` `isShown()` = `is_shown()` in build.py.
+- **On Work page is opt-in** (owner chose): the editor's *On Work page*
+  checkmark (`on_work` / `off_work`). Photos added to the album after
+  `WORK_FROM` (2026-11-26) start off Work; earlier ones stay on. Off-Work
+  photos still appear in their collection, as highlights and on share pages.
+  Rule in `site/meta.js` `onWork()` = `on_work()` in build.py.
 - **Locations are city / state-region / country only** (owner's rule). Never
   store or publish coordinates or anything finer; picks come from the
   built-in GeoNames list so names stay standard. The `located` flag (photo

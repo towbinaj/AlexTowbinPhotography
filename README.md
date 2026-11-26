@@ -1,7 +1,10 @@
 # Alex Towbin Photography
 
 A photography portfolio that updates itself from an iCloud shared album and is
-hosted free on GitHub Pages at **https://towbinaj.github.io/AlexTowbinPhotography/**.
+hosted free on GitHub Pages at **https://photo.alextowbin.com/** (the owner's
+domain `alextowbin.com`, bought at Cloudflare; the main address is kept free
+for other projects). Old `towbinaj.github.io/AlexTowbinPhotography/` links
+redirect there.
 
 **To add or remove a photo, add it to (or remove it from) the shared album in
 Apple Photos.** A GitHub Action is scheduled to rebuild the site **every
@@ -112,7 +115,7 @@ comments on shared-album photos, through the album's public link.
 
 ### Phone editor app (`/edit/`)
 A small app for editing on your phone, at
-**https://towbinaj.github.io/AlexTowbinPhotography/edit/** (not linked from the
+**https://photo.alextowbin.com/edit/** (not linked from the
 site, and hidden from search engines). In Safari, tap *Share → Add to Home
 Screen* to install it; it gets its own icon (the monogram on a light
 background) and opens full screen.
@@ -249,6 +252,14 @@ No website can make images impossible to copy: screenshots and browser
 developer tools still work. These measures stop casual saving and make your
 ownership clear wherever the files end up, which is what matters if you ever
 need to file a takedown.
+
+## Domain
+`photo.alextowbin.com` is a CNAME to `towbinaj.github.io` in Cloudflare DNS
+(DNS only, not proxied), set as the custom domain in the repository's
+**Settings → Pages** with **Enforce HTTPS** on. `alextowbin.com` is verified
+on the owner's GitHub account (TXT record), so no one else can claim it or
+its subdomains. The build gets the address from GitHub Pages (`SITE_URL`), so
+nothing in the code names the domain.
 
 ## Visitor counts (optional)
 With a free [GoatCounter](https://www.goatcounter.com/) account, the site

@@ -3,7 +3,8 @@
 Status as of 2026-11-18. Read `CLAUDE.md` first for rules and preferences.
 
 ## Current state: live ✅
-- **Site:** https://towbinaj.github.io/AlexTowbinPhotography/
+- **Site:** https://photo.alextowbin.com/ (since 2026-11-26; the old
+  `towbinaj.github.io/AlexTowbinPhotography/` redirects)
 - **First deploy:** Actions run #1 succeeded. 32 photos, ~55 MB site, ~2 min
   build. Originals (~460 MB) are cached in Actions (`.cache/originals`), so
   later runs only download new photos.
@@ -284,12 +285,12 @@ a **main-page highlight**, and **check its location**. Agreed design:
 ## Open items / ideas
 1. **Tagline** is now the owner's Instagram bio. `about` is still empty, so
    the About section is hidden.
-2. **Repo rename to `towbinaj.github.io`.** This gives the shorter URL
-   `https://towbinaj.github.io/`. It also makes `robots.txt` effective:
-   crawlers only read it at the domain root, so the AI-crawler blocks are
-   currently ignored, though the `noai` meta tags still apply. After a rename,
-   update URLs in `README.md` / `CLAUDE.md`; `SITE_URL` comes from
-   `configure-pages` automatically. Needs the owner's OK.
+2. ~~Repo rename to `towbinaj.github.io`~~ Superseded: the owner bought
+   `alextowbin.com` (Cloudflare) and the site moved to the subdomain
+   `photo.alextowbin.com` (CNAME, DNS only; domain verified on GitHub).
+   `robots.txt` now sits at a domain root, so the AI-crawler blocks apply.
+   The editor app's storage is per address: the owner re-installs it from
+   `/edit/` and re-enters both keys + Face ID.
 3. **Fail the CI build if `ICLOUD_ALBUM` is missing**, rather than deploying
    an empty gallery.
 4. **Actions warning:** Node 20 is deprecated. Bump `actions/checkout`,

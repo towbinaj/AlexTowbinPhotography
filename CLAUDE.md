@@ -5,7 +5,8 @@ Conventions for working in this repo. **This repo is public.** Read
 
 ## What this is
 A self-updating photography portfolio on GitHub Pages:
-https://towbinaj.github.io/AlexTowbinPhotography/
+https://photo.alextowbin.com/ (custom domain; was
+https://towbinaj.github.io/AlexTowbinPhotography/, which now redirects)
 
 A GitHub Action (`.github/workflows/deploy.yml`) runs hourly (:17), on every push to
 `main`, and on demand. It runs `scripts/build.py`, which pulls photos from the

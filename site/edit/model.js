@@ -4,7 +4,7 @@
 //     "titles":      { "<id>": "Title" },
 //     "order":       ["<id>", …],                       // main page order
 //     "collections": [{ "name": "Series", "photos": ["<id>", …] }],  // order within each
-//     "highlights":  ["<id>", …],                        // shown on the main page / hero
+//     "highlights":  ["<id>", …],                        // home page + slideshow, in this order
 //     "tags":        ["Architecture", …],                // the tag library
 //     "photo_tags":  { "<id>": ["Architecture", …] },    // only names from the library
 //     "locations":   { "<id>": place },                  // see site/meta.js (city/region/country)
@@ -196,8 +196,9 @@
       out.collections = out.collections.filter((c) => c.photos.length);
     }
     if (has(change, "highlight")) {
-      out.highlights = out.highlights.filter((x) => x !== id);
-      if (change.highlight) out.highlights.push(id);
+      // Already highlighted: keep its place. Newly highlighted: goes last.
+      if (!change.highlight) out.highlights = out.highlights.filter((x) => x !== id);
+      else if (!out.highlights.includes(id)) out.highlights.push(id);
     }
     if (has(change, "tags")) {
       // Only library tags; unknown names are added to the library first.
@@ -280,6 +281,12 @@
     c.photos = keep.concat(c.photos.filter((id) => !keep.includes(id)));
     return out;
   }
+  // Highlights: the home page order (any highlighted photo newIds lacks goes last).
+  function reorderHighlights(doc, newIds) {
+    const out = copy(doc), keep = newIds.filter((id) => out.highlights.includes(id));
+    out.highlights = keep.concat(out.highlights.filter((id) => !keep.includes(id)));
+    return out;
+  }
   // Undo is only safe if the data is exactly what our last save wrote.
   const sameDoc = (a, b) => serialize(a) === serialize(b);
 
@@ -329,7 +336,7 @@
 
   const api = { normalize, orderPhotos, collectionOf, applyChange, describe, serialize, cleanName, MAX_NAME,
     addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, mainPosFromShown,
-    reorderMain, reorderCollection, sameDoc };
+    reorderMain, reorderCollection, reorderHighlights, sameDoc };
   root.EditModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

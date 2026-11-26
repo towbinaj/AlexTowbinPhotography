@@ -159,8 +159,10 @@ background) and opens full screen.
   who knows where to look could find them.
 - **Order** (top bar): drag photos into order instead of typing numbers.
   From the normal grid it orders the **main page** (only photos shown on the
-  site; hidden ones keep their places); with a collection's filter selected
-  it orders **that collection**. Drag a photo by **⠿**, or nudge it with
+  site; hidden ones keep their places), which is the Work page order; with a
+  collection's filter selected it orders **that collection** (its first photo
+  is the cover); with the **★** filter it orders the **highlights** (the Home
+  page and its slideshow). Drag a photo by **⠿**, or nudge it with
   **‹ ›**, then **Save** (one save for the whole order).
 - **Undo:** after every save (a photo, a bulk change, a tag edit, a new
   order) an **Undo** bar appears for 20 seconds. It puts back exactly what
@@ -173,7 +175,8 @@ background) and opens full screen.
   - **Collection:** pick one, create a new one, or *No collection*. Photos
     already in it keep their place; the rest go at the end in main page order.
   - **Location:** pick a place for all of them.
-  - **★ Highlight:** star all of them for the opening slideshow; if they're
+  - **★ Highlight:** star all of them for the Home page (new ones go last in
+    the highlights order; already starred ones keep their place); if they're
     all starred already, the button reads **★ Remove** and un-stars them.
   - **Show / Hide:** release or pull back all of them.
   Each is one save.
@@ -226,8 +229,8 @@ the photo's title and link filled in.
 - **Work gallery:** justified rows: every photo in a row is the same height,
   widths follow each photo's shape (portrait, 4:3, 16:9, square), and each
   row spans the page. Nothing is cropped; the last row isn't stretched.
-- **Opening slideshow:** photos you mark *Highlight* in the app, in your main
-  page order (up to 12). With none marked, it shows the newest few photos and
+- **Opening slideshow:** photos you mark *Highlight* in the app, in the
+  highlights' own order (★ filter → Order in the app; up to 12). With none marked, it shows the newest few photos and
   a random mix of the rest. One highlight shows as a single still image.
 - **Collections:** once you make a collection in the app, links appear above
   the gallery: *All* plus each collection with its count. Choosing one shows

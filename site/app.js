@@ -157,8 +157,13 @@
   // order. With none, it shows the newest few, then a random sample.
   const MAX_SLIDES = 12;
   function highlightsFrom(raw) {
-    const ids = new Set(Array.isArray(raw) ? raw.slice(0, 5000).filter((id) => typeof id === "string") : []);
-    return allPhotos.filter((p) => ids.has(p.id)).slice(0, MAX_SLIDES);
+    // In the highlights' own order (set in the editor: ★ filter, then Order).
+    const byId = new Map(allPhotos.map((p) => [p.id, p])), out = [];
+    for (const id of Array.isArray(raw) ? raw.slice(0, 5000) : []) {
+      const p = typeof id === "string" && byId.get(id);
+      if (p && !out.includes(p)) out.push(p);
+    }
+    return out.slice(0, MAX_SLIDES);
   }
   function hero(highlights) {
     const media = $("hero-media");

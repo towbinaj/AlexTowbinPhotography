@@ -156,7 +156,7 @@
     if (f === "noplace") return list.filter((p) => !doc.locations[p.id]);
     if (f === "hidden") return list.filter((p) => !M.isShown(doc, p));
     if (f === "shown") return list.filter((p) => M.isShown(doc, p));
-    if (f === "high") return list.filter((p) => doc.highlights.includes(p.id));
+    if (f === "high") { const byId = new Map(list.map((p) => [p.id, p])); return doc.highlights.map((id) => byId.get(id)).filter(Boolean); }
     if (f === "none") return list.filter((p) => !M.collectionOf(doc, p.id));
     if (f[0] === "c") {
       const c = doc.collections[Number(f.slice(1))];
@@ -769,7 +769,8 @@
   // ---------------- reorder ----------------
   // Main page: the photos shown on the site, in their order (hidden ones keep
   // their places). With a collection's filter on: that collection's order.
-  let roMode = null; // { kind: "main" } | { kind: "coll", name }
+  // With the ★ filter on: the highlights' order (home page and slideshow).
+  let roMode = null; // { kind: "main" } | { kind: "coll", name } | { kind: "high" }
   function roNumber() {
     const tiles = [...$("ro-grid").children];
     tiles.forEach((t, i) => {
@@ -782,11 +783,16 @@
   }
   function roOpen() {
     const c = filter[0] === "c" ? doc.collections[Number(filter.slice(1))] : null;
-    roMode = c ? { kind: "coll", name: c.name } : { kind: "main" };
+    const high = filter === "high";
+    roMode = c ? { kind: "coll", name: c.name } : high ? { kind: "high" } : { kind: "main" };
     const byId = new Map(all.map((p) => [p.id, p]));
-    const list = c ? c.photos.map((id) => byId.get(id)).filter(Boolean) : ordered().filter((p) => M.isShown(doc, p));
-    $("ro-h").textContent = c ? c.name : "Main page";
-    $("ro-hint").textContent = (c ? `Order of this collection (${list.length}). ` : `Order on the main page: the ${list.length} photos shown on the site. Hidden photos keep their places. `)
+    const list = c ? c.photos.map((id) => byId.get(id)).filter(Boolean)
+      : high ? doc.highlights.map((id) => byId.get(id)).filter(Boolean)
+      : ordered().filter((p) => M.isShown(doc, p));
+    $("ro-h").textContent = c ? c.name : high ? "★ Highlights" : "Main page";
+    $("ro-hint").textContent = (c ? `Order of this collection (${list.length}). `
+      : high ? `Order of the ${list.length} highlights on the home page and in its slideshow. `
+      : `Order on the Work page: the ${list.length} photos shown on the site. Hidden photos keep their places. `)
       + "Drag a photo by ⠿, or nudge it with ‹ ›. Then Save.";
     const grid = $("ro-grid"); grid.textContent = "";
     list.forEach((p, i) => {
@@ -850,6 +856,7 @@
     try {
       await commit((d) => {
         if (mode.kind === "coll") return { next: M.reorderCollection(d, mode.name, ids), message: `Reorder collection "${mode.name}"` };
+        if (mode.kind === "high") return { next: M.reorderHighlights(d, ids), message: `Reorder highlights (${ids.length} photos)` };
         const orderedIds = M.orderPhotos(all, d.order).map((p) => p.id);
         return { next: M.reorderMain(d, orderedIds, ids), message: `Reorder main page (${ids.length} photos)` };
       });

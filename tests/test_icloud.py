@@ -633,6 +633,18 @@ def test_model_bulk_highlight_on_and_off():
     assert on == ["a", "b", "c"] and off == ["b"] and msg == "2 photos: highlighted" and orig == ["a"]
 
 
+def test_model_highlights_keep_their_own_order():
+    script = """
+    let d = M.normalize({highlights:['a','b','c']}, cleanTitle);
+    const re = M.reorderHighlights(d, ['c','a']);              // b (left out) goes last
+    const again = M.applyBulk(re, ['a','d'], {highlight:true}, cleanTitle); // a keeps its place, d goes last
+    const one = M.applyChange(again, {id:'c', highlight:true}, cleanTitle);  // no move
+    process.stdout.write(JSON.stringify([re.highlights, again.highlights, one.highlights, d.highlights]));
+    """
+    re_, again, one, orig = _node_model(script)
+    assert re_ == ["c", "a", "b"] and again == ["c", "a", "b", "d"] and one == again and orig == ["a", "b", "c"]
+
+
 # ---- processed-image cache ----
 
 def test_render_cache_hit_skips_the_original(tmp_path):

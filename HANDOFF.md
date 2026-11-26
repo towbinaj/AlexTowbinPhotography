@@ -172,8 +172,9 @@ the gallery (hidden until a collection exists), `#collection-<slug>` deep
 links, heading becomes the collection name, lightbox steps within it. Built
 from live data, baked fallback in `config.json` `collections`
 (`load_collections()`). `#edit` forces *All* (positions are global).
-**Highlights (branch):** the hero slideshow shows highlighted photos in main
-page order (max 12; live data, baked fallback `config.json` `highlights`,
+**Highlights:** the hero slideshow and Home grid show highlighted photos in
+the highlights' own order (`highlights` array; editor ★ filter → Order,
+`reorderHighlights()`; newly starred go last). Was main page order until 2026-11-26 (max 12; live data, baked fallback `config.json` `highlights`,
 `load_highlights()`); none → old newest+random behavior.
 **Face ID lock (branch):** `site/edit/lock.js`. A platform passkey
 (WebAuthn, userVerification required, no server). With the PRF extension

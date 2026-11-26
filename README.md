@@ -129,8 +129,8 @@ background) and opens full screen.
   collection and number, and ★ for highlights. Filter by *Untitled*, *★*,
   *No collection* or any collection.
 - **Photo:** tap one to set its **title**, **collection** (pick one or
-  *New collection…*), its **No. in the collection**, **highlight on main
-  page**, and its **main page No.** (its place among the photos shown on the
+  *New collection…*), its **No. in the collection**, **highlight on the
+  Home page**, and its **Work page No.** (its place among the photos shown on the
   site, as visitors see them; hidden photos have none) Also shows when it was taken and added,
   and whether the photo kept its **location** (yes/no only; coordinates are
   never published). Swipe or use the arrows for the next photo. **Save**
@@ -158,8 +158,8 @@ background) and opens full screen.
   what lets the editor show them and makes releasing instant), so someone
   who knows where to look could find them.
 - **Order** (top bar): drag photos into order instead of typing numbers.
-  From the normal grid it orders the **main page** (only photos shown on the
-  site; hidden ones keep their places), which is the Work page order; with a
+  From the normal grid it orders the **Work page** (only photos shown on the
+  site; hidden ones keep their places); with a
   collection's filter selected it orders **that collection** (its first photo
   is the cover); with the **★** filter it orders the **highlights** (the Home
   page and its slideshow). Drag a photo by **⠿**, or nudge it with
@@ -173,7 +173,7 @@ background) and opens full screen.
   - **Tags:** each tag shows ✓ (all selected have it), – (some) or empty;
     tap to add it to all, tap again to remove it from all; *Apply* saves.
   - **Collection:** pick one, create a new one, or *No collection*. Photos
-    already in it keep their place; the rest go at the end in main page order.
+    already in it keep their place; the rest go at the end in Work page order.
   - **Location:** pick a place for all of them.
   - **★ Highlight:** star all of them for the Home page (new ones go last in
     the highlights order; already starred ones keep their place); if they're

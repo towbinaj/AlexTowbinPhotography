@@ -307,7 +307,7 @@
     if (String(v.mpos) !== String(base.mpos) && v.mpos !== "") {
       const max = Number($("f-mpos").max) || 1;
       const n = Math.round(Number(v.mpos));
-      if (!Number.isFinite(n) || n < 1 || n > max) { status(`Main page No. must be 1–${max}.`, true); return; }
+      if (!Number.isFinite(n) || n < 1 || n > max) { status(`Work page No. must be 1–${max}.`, true); return; }
       change.shownPos = n;
     }
     $("f-save").disabled = true; status("Saving…");
@@ -693,7 +693,7 @@
   function renderBulkColl() {
     const ids = selIds(), ul = $("bc-rows"); ul.textContent = "";
     $("bc-h").textContent = `Collection · ${ids.length} photo${ids.length === 1 ? "" : "s"}`;
-    $("bc-hint").textContent = "Photos already in the collection keep their place; the others are added at the end, in main page order. A photo can be in one collection.";
+    $("bc-hint").textContent = "Photos already in the collection keep their place; the others are added at the end, in Work page order. A photo can be in one collection.";
     $("bc-status").textContent = "";
     const row = (label, sub, name) => {
       const li = el("li"), b = el("button"); b.type = "button";
@@ -789,9 +789,9 @@
     const list = c ? c.photos.map((id) => byId.get(id)).filter(Boolean)
       : high ? doc.highlights.map((id) => byId.get(id)).filter(Boolean)
       : ordered().filter((p) => M.isShown(doc, p));
-    $("ro-h").textContent = c ? c.name : high ? "★ Highlights" : "Main page";
+    $("ro-h").textContent = c ? c.name : high ? "★ Highlights" : "Work page";
     $("ro-hint").textContent = (c ? `Order of this collection (${list.length}). `
-      : high ? `Order of the ${list.length} highlights on the home page and in its slideshow. `
+      : high ? `Order of the ${list.length} highlights on the Home page and in its slideshow. `
       : `Order on the Work page: the ${list.length} photos shown on the site. Hidden photos keep their places. `)
       + "Drag a photo by ⠿, or nudge it with ‹ ›. Then Save.";
     const grid = $("ro-grid"); grid.textContent = "";
@@ -858,7 +858,7 @@
         if (mode.kind === "coll") return { next: M.reorderCollection(d, mode.name, ids), message: `Reorder collection "${mode.name}"` };
         if (mode.kind === "high") return { next: M.reorderHighlights(d, ids), message: `Reorder highlights (${ids.length} photos)` };
         const orderedIds = M.orderPhotos(all, d.order).map((p) => p.id);
-        return { next: M.reorderMain(d, orderedIds, ids), message: `Reorder main page (${ids.length} photos)` };
+        return { next: M.reorderMain(d, orderedIds, ids), message: `Reorder Work page (${ids.length} photos)` };
       });
       show("list"); renderList();
       listStatus("New order saved · on the site in ~5 min");

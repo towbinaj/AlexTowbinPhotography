@@ -321,7 +321,7 @@
     const s1 = after.published.includes(id) ? 1 : after.hidden.includes(id) ? -1 : 0;
     if (s0 !== s1 && s1) parts.push(s1 > 0 ? "shown on site" : "hidden from site");
     const o0 = before.order.indexOf(id), o1 = after.order.indexOf(id);
-    if (o0 !== o1 || before.order.length !== after.order.length) parts.push(`main page #${o1 + 1}`);
+    if (o0 !== o1 || before.order.length !== after.order.length) parts.push(`Work page #${o1 + 1}`);
     return `Photo ${id}: ${parts.join(", ") || "no change"}`;
   }
 

@@ -456,7 +456,7 @@
       idx = {
         countries: C.map(([cc, name]) => ({ place: { level: "country", country: name, cc }, name: fold(name), extra: fold(cc) })),
         regions: R.map(([code, name, ci]) => ({ place: { level: "region", code, region: name, country: C[ci][1], cc: C[ci][0] }, name: fold(name), extra: fold(C[ci][1]) })),
-        cities: d.cities.map(([gid, name, ri, ci, ascii]) => ({ gid, name: fold(name), ascii: ascii ? fold(ascii) : "", raw: name, ri, ci, extra: fold((ri >= 0 ? R[ri][1] : "") + " " + C[ci][1] + " " + C[ci][0]) })),
+        cities: d.cities.map(([gid, name, ri, ci, aliases]) => ({ gid, name: fold(name), alts: aliases ? aliases.split("|").map(fold) : [], raw: name, ri, ci, extra: fold((ri >= 0 ? R[ri][1] : "") + " " + C[ci][1] + " " + C[ci][0]) })),
       };
     }));
     const cityPlace = (c) => {
@@ -467,10 +467,12 @@
     };
     // The first word must start the place's name (or a word in it); any other
     // words can match its state/region or country. Exact names rank first.
-    function score(name, alt, first) {
-      if (name === first || alt === first) return 0;
-      if (name.startsWith(first) || alt.startsWith(first)) return 1;
-      if ((" " + name).includes(" " + first) || (" " + alt).includes(" " + first)) return 2;
+    // Other spellings (Irákleion for Heraklion, Zürich for Zurich) match too.
+    function score(name, alts, first) {
+      const all = [name, ...alts];
+      if (all.some((n) => n === first)) return 0;
+      if (all.some((n) => n.startsWith(first))) return 1;
+      if (all.some((n) => (" " + n).includes(" " + first))) return 2;
       return -1;
     }
     function find(q) {
@@ -485,7 +487,7 @@
         const pools = [["country", idx.countries], ["region", idx.regions], ["city", idx.cities]];
         for (const [lvl, pool] of pools) {
           for (const e of pool) {
-            const s = score(e.name, e.ascii || "", first);
+            const s = score(e.name, e.alts || [], first);
             if (s < 0 || !ok(e)) continue;
             const pl = lvl === "city" ? null : e.place;
             const key = lvl === "city" ? "c:" + e.gid : Meta.placeKey(pl);  // no duplicates

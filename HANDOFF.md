@@ -155,7 +155,9 @@ Site `#edit` now preserves unknown fields when saving. **Merged 2026-11-18.**
 tag library and standardized locations at city/state/country level only.
 Owner chose the **built-in city list** (GeoNames cities1000 + inhabited
 islands (1,000+ people, streamed from allCountries; added 2026-11-26 for
-Santorini/Milos) + admin1 + countries → `site/edit/places.json`, ~5.6 MB
+Santorini/Milos) + English names from alternateNamesV2 (display English
+when the GeoNames name has accents, e.g. Heraklion; other forms kept as
+`|`-separated search aliases) + admin1 + countries → `site/edit/places.json`, ~5.6 MB
 (~2.5 MB gzipped), lazy-loaded by the app; made
 by `scripts/make_places.py`; `download.geonames.org` was added to the cloud
 environment for this) and **showing both on the site with search**. Data:

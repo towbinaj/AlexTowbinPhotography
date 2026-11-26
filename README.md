@@ -143,8 +143,9 @@ background) and opens full screen.
   **city**, a **state/region**, or just a **country**: nothing more precise
   is ever stored or shown. Places you've used are listed first. The list is
   [GeoNames](https://www.geonames.org/) (CC BY 4.0): towns of 1,000+ people
-  plus inhabited islands ("Santorini Island", "Milos Island"); for a smaller
-  place choose its state/region. *Photo GPS* separately says whether the image file itself
+  plus inhabited islands ("Santorini Island", "Milos Island"), shown in
+  English where GeoNames has it ("Heraklion", not "Irákleion"; either
+  spelling finds it); for a smaller place choose its state/region. *Photo GPS* separately says whether the image file itself
   kept its location (yes/no only).
 - **Search** (top of the grid) by title, place, tag or collection; filters
   include *Shown* (on the site), *Hidden*, *Untitled* and *No location*.

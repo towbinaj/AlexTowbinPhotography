@@ -215,8 +215,10 @@ section says where it appears):
 - **Collections** (`/collections/`): one cover per series (its first photo,
   shown whole), each opening that series on Work. The menu link appears once
   a collection exists.
-- **About** (`/about/`): your bio (`about` in `config.json`), **Prints &
-  inquiries** and the copyright notice.
+- **About** (`/about/`): your bio (`about` in `config.json`) and **Prints &
+  inquiries**.
+
+Every page ends with a small **Copyright** block (notice, terms, contact).
 
 **Prints:** `prints_email` in `config.json` (`prints@alextowbin.com`, which
 Cloudflare Email Routing forwards to your inbox). The About page links to it,
@@ -262,9 +264,9 @@ the photo's title and link filled in.
   change the icon.
 
 ## Copyright protection
-- **On the page:** "© <years> <name>. All rights reserved." appears in the footer,
-  in a Copyright section with usage terms and a licensing contact, and on every
-  photo in the full-screen view.
+- **On the page:** "© <years> <name>. All rights reserved." appears in a small
+  Copyright block at the bottom of every page (with usage terms and a
+  licensing contact), and on every photo in the full-screen view.
 - **In the page metadata:** `author` / `copyright` / `dcterms.rights` meta tags,
   plus schema.org structured data marking you as `creator` and `copyrightHolder`
   of every image, with `copyrightNotice` and `creditText`. Google Images shows

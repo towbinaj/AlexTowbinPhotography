@@ -90,7 +90,6 @@
     const name = cfg.name || (cfg.title || "Photography").replace(/\s+Photography$/i, "");
     $("bar-name").textContent = name;
     const r = cfg.rights || { holder: name, notice: `© ${new Date().getFullYear()} ${name}. All rights reserved.`, terms: "" };
-    $("footer-notice").textContent = r.notice;
     $("rights-notice").textContent = r.notice;
     $("rights-terms").textContent = r.terms;
     $("lb-credit").textContent = `© ${r.holder}`;

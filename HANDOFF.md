@@ -78,7 +78,7 @@ supported as a fallback, which `download_album()` picks from the token shape.
   navigate, swipe down to close, deep links `#photo-<id>`.
 - **Extras:** film grain and an Instagram
   marquee in the footer.
-- **Copyright section:** `#rights`, with terms and a contact via Instagram.
+- **Copyright section:** `#rights`, small, at the bottom of every page (above the footer), with terms and a contact (prints email + Instagram).
 - **Metadata:** `index.html` placeholders (`{{TITLE}}`, `{{AUTHOR}}`,
   `{{COPYRIGHT}}`, `{{JSONLD}}`, `{{OG_IMAGE}}`) are filled by `build.py`.
   The JSON-LD is an `ImageGallery` with an `ImageObject` per photo (creator,

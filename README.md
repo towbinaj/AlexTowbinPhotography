@@ -247,7 +247,7 @@ the photo's title and link filled in.
   gallery (View Transitions). Use arrow keys or swipe to move between photos,
   swipe down to close. Each photo has its own shareable link (`#photo-…`).
 - **Loading and polish:** a blurred preview shows instantly while each image
-  loads, plus subtle film grain and a custom cursor on desktop.
+  loads, plus subtle film grain.
 - **Accessibility:** motion is turned off for visitors who ask for reduced
   motion.
 - **Icons:** an "AT." monogram in the site's serif type, used for the browser

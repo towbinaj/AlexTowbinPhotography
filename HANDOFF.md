@@ -74,7 +74,7 @@ supported as a fallback, which `download_album()` picks from the token shape.
 - **Index view:** a dense grid.
 - **Lightbox:** View Transitions morph from the tile, keys and swipe to
   navigate, swipe down to close, deep links `#photo-<id>`.
-- **Extras:** film grain, a custom cursor on fine pointers, an Instagram
+- **Extras:** film grain and an Instagram
   marquee in the footer.
 - **Copyright section:** `#rights`, with terms and a contact via Instagram.
 - **Metadata:** `index.html` placeholders (`{{TITLE}}`, `{{AUTHOR}}`,

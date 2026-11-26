@@ -44,19 +44,6 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   60% { transform: translate(-2%, -1%); } 80% { transform: translate(3%, 3%); } 100% { transform: translate(0, 0); }
 }
 
-/* Custom cursor (fine pointers only; enabled by JS) */
-.cursor {
-  position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none;
-  width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
-  background: var(--fg); mix-blend-mode: difference;
-  display: none; align-items: center; justify-content: center;
-  transition: width .35s var(--ease), height .35s var(--ease), margin .35s var(--ease);
-}
-.cursor span { font: 500 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: #000; opacity: 0; transition: opacity .2s; }
-body.has-cursor .cursor { display: flex; }
-body.has-cursor .cursor.big { width: 84px; height: 84px; margin: -42px 0 0 -42px; }
-body.has-cursor .cursor.big span { opacity: 1; }
-
 /* Top bar */
 .bar {
   position: fixed; inset: 0 0 auto 0; z-index: 20;

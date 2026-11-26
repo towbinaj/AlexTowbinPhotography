@@ -3,7 +3,6 @@
 
   const $ = (id) => document.getElementById(id);
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const isObj = (o) => !!o && typeof o === "object" && !Array.isArray(o);
   const pad2 = (n) => String(n).padStart(2, "0");
   const monthYear = (iso) => {
@@ -279,24 +278,6 @@
     });
   });
 
-  // ---------------- custom cursor ----------------
-  function cursor() {
-    if (!finePointer || reduceMotion) return;
-    const el = document.querySelector(".cursor");
-    document.body.classList.add("has-cursor");
-    let x = innerWidth / 2, y = innerHeight / 2, cx = x, cy = y;
-    addEventListener("mousemove", (e) => {
-      x = e.clientX; y = e.clientY;
-      el.classList.toggle("big", !!e.target.closest(".ph, .hero-media .slide") && $("lightbox").hidden);
-    }, { passive: true });
-    document.addEventListener("mouseleave", () => { el.style.opacity = "0"; });
-    document.addEventListener("mouseenter", () => { el.style.opacity = "1"; });
-    (function loop() {
-      cx += (x - cx) * 0.2; cy += (y - cy) * 0.2;
-      el.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
-      requestAnimationFrame(loop);
-    })();
-  }
 
   // Run `fn` as a view transition. If another one interrupts it, the DOM update
   // still happens; the rejected animation promises are expected, so swallow them.
@@ -349,8 +330,6 @@
     if (i < 0) return;
     lastFocus = document.activeElement;
     current = i;
-    const cur = document.querySelector(".cursor");
-    if (cur) cur.classList.remove("big");
     const p = photos[i];
     const reveal = () => {
       if (fromImg) fromImg.style.viewTransitionName = "";
@@ -626,7 +605,6 @@
     // Image paths in photos.json are relative to the site root.
     for (const p of listed) for (const s of p.src || []) if (!/^(https?:|\/)/.test(s.url)) s.url = ROOT + s.url;
     allPhotos = photos = listed.filter((p) => (vis ? window.PhotoMeta.isShown(p.id, p.added, vis) : !p.draft));
-    cursor();
     const collections = groups.parse(rawCollections);
     $("nav-collections").hidden = !collections.length;
     if (PAGE === "collections") { renderCollections(collections); return; }

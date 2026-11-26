@@ -273,7 +273,9 @@ the photo's title and link filled in.
   "Save Image" menu are disabled on photos.
 - **AI crawlers:** `robots.txt` and `noai` meta tags ask AI-training crawlers
   (GPTBot, CCBot, Google-Extended, ClaudeBot, etc.) not to collect the site.
-  Normal search engines can still index it.
+  AI assistants and AI search (ChatGPT-User, OAI-SearchBot, Claude-User,
+  Perplexity, etc.) may read the pages but are asked not to fetch `/img/`,
+  where all the photographs live. Normal search engines can still index it.
 
 No website can make images impossible to copy: screenshots and browser
 developer tools still work. These measures stop casual saving and make your

@@ -784,3 +784,18 @@ def test_model_reorder_and_undo_check():
     assert coll == ["z", "x", "y"]                 # y wasn't in the new list: kept, at the end
     assert orig == ["h1", "a", "b", "h2", "c"]     # input untouched
     assert same_rt is True and same_other is False # a saved doc read back compares equal (undo check)
+
+
+def test_sitemap_lists_pages_and_share_pages():
+    entries = [{"id": "abc123", "page": True, "added": "2026-11-20T10:00:00Z"},
+               {"id": "hidden1", "added": "2026-11-21T10:00:00Z"},          # no share page: left out
+               {"id": "nodate", "page": True},
+               {"id": "../evil", "page": True}]                              # unsafe id: left out
+    xml = build.sitemap_xml("https://photo.example.org/", entries)
+    import re
+    locs = re.findall(r"<loc>([^<]+)</loc>", xml)
+    assert locs == ["https://photo.example.org/", "https://photo.example.org/work/",
+                    "https://photo.example.org/collections/", "https://photo.example.org/about/",
+                    "https://photo.example.org/p/abc123/", "https://photo.example.org/p/nodate/"]
+    assert "<lastmod>2026-11-20</lastmod>" in xml and xml.count("<lastmod>") == 1
+    assert xml.startswith('<?xml version="1.0"') and 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' in xml

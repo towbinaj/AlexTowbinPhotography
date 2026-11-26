@@ -290,6 +290,9 @@ the photo's title and link filled in.
   AI assistants and AI search (ChatGPT-User, OAI-SearchBot, Claude-User,
   Perplexity, etc.) may read the pages but are asked not to fetch `/img/`,
   where all the photographs live. Normal search engines can still index it.
+- **Sitemap:** each build writes `sitemap.xml` (the four pages plus every
+  shown photo's share page) and adds a `Sitemap:` line to `robots.txt`, so
+  search engines (and AI search that relies on them) find the whole site.
 
 No website can make images impossible to copy: screenshots and browser
 developer tools still work. These measures stop casual saving and make your

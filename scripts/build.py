@@ -900,6 +900,19 @@ def _month_year(iso: str) -> str:
         return ""
 
 
+def sitemap_xml(site_url: str, entries: list[dict]) -> str:
+    """sitemap.xml: the four pages plus a share page per shown photo (hidden
+    photos have none), so search engines and AI search find everything."""
+    base = site_url.rstrip("/") + "/"
+    urls = [(base + (folder + "/" if folder else ""), "") for _, folder, _ in PAGES]
+    for e in entries:
+        if e.get("page") and _SAFE_ID.fullmatch(e["id"]):
+            added = (e.get("added") or "")[:10]
+            urls.append((f"{base}p/{e['id']}/", added if re.fullmatch(r"\d{4}-\d{2}-\d{2}", added) else ""))
+    rows = "".join(f"  <url><loc>{html.escape(u)}</loc>{f'<lastmod>{d}</lastmod>' if d else ''}</url>\n" for u, d in urls)
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{rows}</urlset>\n'
+
+
 def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_size: tuple[int, int]) -> str:
     """HTML for p/<id>/: the photo, its title, place and date, and link-preview
     tags pointing at its own image. Everything from curation is escaped."""
@@ -1109,6 +1122,11 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
             text = text.replace("</head>", f'  <meta name="app-version" content="{version}">\n</head>', 1)
         page.write_text(text)
     (OUT / "version.json").write_text(json.dumps({"v": version}))
+    # Sitemap (needs the site's address, which CI provides), linked from robots.txt.
+    if site_url:
+        (OUT / "sitemap.xml").write_text(sitemap_xml(site_url, entries))
+        robots = OUT / "robots.txt"
+        robots.write_text(robots.read_text().rstrip("\n") + f"\n\nSitemap: {site_url}/sitemap.xml\n")
     (OUT / ".nojekyll").write_text("")
     print(f"Built {len(entries)} photos ({len(og_sizes)} share pages) into {OUT}")
 

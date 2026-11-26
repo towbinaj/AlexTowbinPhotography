@@ -982,7 +982,7 @@
     repo = typeof cfg.data_repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(cfg.data_repo) ? cfg.data_repo : "";
     siteRepo = typeof cfg.site_repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(cfg.site_repo) ? cfg.site_repo : "";
     builtAt = typeof cfg.built_at === "string" ? cfg.built_at : "";
-    $("pubbar").hidden = !siteRepo;
+    $("pubbar").hidden = $("pub-now").hidden = !siteRepo;
     all = Array.isArray(list) ? list.filter((p) => p && typeof p.id === "string" && Array.isArray(p.src) && p.src.length) : [];
     $("setup-repo").textContent = repo || "the photo data repository";
     if (!repo) { $("boot").textContent = "The editor works on the published site only."; return; }

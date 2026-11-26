@@ -60,12 +60,12 @@
       <span class="mono count" id="sel-count" aria-live="polite"></span>
       <button type="button" class="icon-btn mono" id="sel-all">Select all</button>
     </header>
-    <div class="searchbar"><input id="list-search" type="search" placeholder="Search titles, places, tags" aria-label="Search photos" autocomplete="off" spellcheck="false" enterkeyhint="search"></div>
-    <p class="banner mono" id="banner" hidden></p>
-    <div class="pubbar" id="pubbar" hidden>
-      <span class="mono" id="pub-status" role="status" aria-live="polite"></span>
-      <button type="button" class="btn ghost small" id="pub-now">Publish now</button>
+    <div class="searchbar searchrow">
+      <input id="list-search" type="search" placeholder="Search titles, places, tags" aria-label="Search photos" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <button type="button" class="btn ghost small" id="pub-now" hidden>Publish now</button>
     </div>
+    <p class="pubbar mono" id="pubbar" hidden><span id="pub-status" role="status" aria-live="polite"></span></p>
+    <p class="banner mono" id="banner" hidden></p>
     <nav class="chips mono" id="chips" aria-label="Filter"></nav>
     </div>
     <div class="grid" id="grid"></div>

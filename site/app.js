@@ -112,7 +112,11 @@
     }
 
     if (cfg.about) {
-      $("about-text").textContent = cfg.about;
+      // Paragraphs split on blank lines; the first is the large lead. Text only.
+      const box = $("about-text"); box.textContent = "";
+      String(cfg.about).split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean).forEach((t, i) => {
+        const p = document.createElement("p"); p.className = i ? "about-more" : "about-lead"; p.textContent = t; box.appendChild(p);
+      });
       $("about").hidden = false;
       $("nav-about").hidden = false;
     }

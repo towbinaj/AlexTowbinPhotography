@@ -202,6 +202,23 @@ stay private to the app (for your own sorting and search); search engines get
 them as hidden keywords. Highlights become the opening slideshow. New album photos show up in the app after the next hourly build.
 
 ## The site
+Four pages, built from one template (`site/index.html`, `data-pages` on each
+section says where it appears):
+- **Home** (`/`): your name, tagline and the highlight slideshow, then your
+  highlighted photos ("Selected work"; the first few if none are marked) and
+  a link to all the work.
+- **Work** (`/work/`): the full gallery with Stream / Index views and the
+  collection links. Old `/#photo-…` and `/#collection-…` links forward here.
+- **Collections** (`/collections/`): one cover per series (its first photo,
+  shown whole), each opening that series on Work. The menu link appears once
+  a collection exists.
+- **About** (`/about/`): your bio (`about` in `config.json`), **Prints &
+  inquiries** and the copyright notice.
+
+**Prints:** `prints_email` in `config.json` (`prints@alextowbin.com`, which
+Cloudflare Email Routing forwards to your inbox). The About page links to it,
+and the full-screen viewer has an **Inquire** link that opens an email with
+the photo's title and link filled in.
 - **Opening screen:** your name in large serif type beside a slideshow of
   recent work, each framed print shown whole (above the name on phones).
 - **Stream view:** staggered columns that drift at slightly different speeds

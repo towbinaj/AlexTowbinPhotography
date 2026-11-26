@@ -205,6 +205,8 @@ body.has-cursor .cursor.big span { opacity: 1; }
 .lb-credit { margin-left: 14px; color: var(--dim); }
 .lb-caption { text-align: center; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-actions { display: flex; justify-content: flex-end; gap: 22px; }
+.lb-actions .lb-link { color: var(--muted); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+.lb-actions .lb-link:hover { color: var(--fg); }
 .lb-actions button { color: var(--muted); transition: color .2s; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
 .lb-actions button:hover { color: var(--fg); }
 @media (max-width: 600px) {
@@ -228,3 +230,41 @@ body.has-cursor .cursor.big span { opacity: 1; }
   html { scroll-behavior: auto; }
 }
 
+
+/* ---------------- pages (one template; see data-pages in index.html) ---------------- */
+body[data-page="home"] [data-pages]:not([data-pages~="home"]),
+body[data-page="work"] [data-pages]:not([data-pages~="work"]),
+body[data-page="collections"] [data-pages]:not([data-pages~="collections"]),
+body[data-page="about"] [data-pages]:not([data-pages~="about"]) { display: none !important; }
+.bar-nav a[aria-current="page"]::after { transform: scaleX(1); background: var(--accent); }
+.view-all { margin-left: auto; color: var(--muted); white-space: nowrap; }
+.view-all:hover { color: var(--fg); }
+.more-link { margin: clamp(28px, 5vh, 56px) 0 0; text-align: center; }
+.more-link a { display: inline-block; padding: 12px 22px; border: 1px solid var(--line); border-radius: 999px; color: var(--fg); }
+.more-link a:hover { border-color: var(--fg); }
+/* Pages without the hero start lower, under the header. */
+body[data-page="collections"] .colls, body[data-page="about"] .about { padding-top: clamp(110px, 16vh, 170px); }
+
+/* Collections page: one cover per series, shown whole (never cropped). */
+.colls { padding: 0 var(--pad) clamp(60px, 10vh, 120px); }
+.colls .section-title { margin-bottom: clamp(28px, 5vh, 56px); }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: clamp(28px, 4vw, 56px) var(--gap); }
+.ccard { display: flex; flex-direction: column; gap: 14px; color: var(--fg); }
+.ccard .cframe { position: relative; display: block; aspect-ratio: 4 / 3; background: var(--bg-2); overflow: hidden; }
+.ccard img { position: absolute; inset: 5%; width: 90%; height: 90%; object-fit: contain; display: block; transition: transform .6s var(--ease); }
+.ccard:hover img { transform: scale(1.02); }
+.ccard .cname { font: 400 clamp(26px, 2.6vw, 38px)/1.05 var(--serif); }
+.ccard .ccount { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .ccard img { transition: none; } }
+
+/* About page: prints & inquiries. */
+.prints { margin-top: clamp(36px, 6vh, 64px); max-width: 60ch; }
+.prints .label { color: var(--muted); margin: 0 0 10px; }
+.prints p { margin: 0; font: 400 clamp(21px, 1.9vw, 28px)/1.36 var(--serif); }
+.prints a, .rights-contact a { color: var(--fg); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
+/* Phones: four header links don't fit; Instagram stays in the footer and on About. */
+@media (max-width: 560px) {
+  .bar-name { white-space: nowrap; }
+  .bar-nav { gap: 16px; }
+  #nav-insta { display: none !important; }
+}

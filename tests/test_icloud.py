@@ -607,7 +607,7 @@ def test_photo_page_escapes_and_points_at_own_image():
     assert "<script>" not in out and "&lt;script&gt;" in out and "&quot;quotes&quot;" in out
     assert '<meta property="og:image" content="https://example.org/site/img/abc123-og.jpg">' in out
     assert '<link rel="canonical" href="https://example.org/site/p/abc123/">' in out
-    assert 'href="../../#photo-abc123"' in out and "Florence, Italy · Mar 2026" in out
+    assert 'href="../../work/#photo-abc123"' in out and "Florence, Italy · Mar 2026" in out
     assert 'src="../../img/abc123-1600.webp"' in out and "{{" not in out
     assert "script-src 'none'" in out  # no scripts on share pages
 

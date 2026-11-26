@@ -247,6 +247,15 @@ URL (validated). app.js sends image-pixel hits (no third-party JS): page view,
 pages carry a static pixel. Skipped: DNT, localhost, `at-no-count` (set by the
 editor app and by visiting with `#nocount`). CSP img-src allows
 `https://*.goatcounter.com`. Inactive until the owner signs up and gives the code.
+**Multi-page site + prints (2026-11-26, branch):** the owner found the one
+long page awkward. index.html is now a template built into `/`, `work/`,
+`collections/`, `about/` (`PAGES` in build.py; `{{PAGE}}`/`{{ROOT}}`;
+`data-pages` + CSS show sections per page; app.js reads body
+data-page/data-root and prefixes paths). Home = hero + highlights (first 9 if
+none); old hash links forward to work/. Prints: `prints_email`
+(prints@alextowbin.com via Cloudflare Email Routing, set up by the owner),
+About block + lightbox Inquire mailto (title + share link). Share pages link
+to `work/#photo-…`. Phone header hides the Instagram link.
 Still to do:
 remove `#edit` once the app has fully replaced it. Not done: Face ID lock
 (optional); step 5 site changes (collections as sections, highlights on the

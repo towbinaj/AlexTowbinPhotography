@@ -899,7 +899,7 @@ def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_
         "AUTHOR": r["holder"], "COPYRIGHT": r["notice"], "SITE_NAME": site_name, "SITE_NAME_SHORT": name,
         "PAGE_URL": page_url, "OG_IMAGE": f"{base}img/{pid}-og.jpg", "OG_W": str(og_size[0]), "OG_H": str(og_size[1]),
         "ALT": title or f"Photograph by {r['holder']}", "HEADING": title or (when or "Untitled"),
-        "SUBLINE": subline if title else place, "GALLERY_URL": f"../../#photo-{pid}",
+        "SUBLINE": subline if title else place, "GALLERY_URL": f"../../work/#photo-{pid}",
         "IMG_SRC": "../../" + mid["url"], "IMG_SRCSET": ", ".join(f"../../{x['url']} {x['w']}w" for x in srcs),
         "W": str(e["w"]), "H": str(e["h"]),
     }
@@ -976,6 +976,9 @@ def render_cached(photo: Photo, key: str, trim: bool, meta, out: Path, cache: Pa
             "located": data["located"], "_og": tuple(data["og"])}
 
 
+PAGES = [("home", "", "Home"), ("work", "work", "Work"), ("collections", "collections", "Collections"), ("about", "about", "About")]
+
+
 def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -1043,14 +1046,23 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
     site_url = os.environ.get("SITE_URL", "").rstrip("/")
     title = html.escape(config.get("title", "Photography"))
     desc = html.escape(config.get("tagline") or config.get("title", ""))
-    index = OUT / "index.html"
-    index.write_text(index.read_text()
-                     .replace("{{TITLE}}", title)
-                     .replace("{{DESCRIPTION}}", desc)
-                     .replace("{{AUTHOR}}", html.escape(r["holder"]))
-                     .replace("{{COPYRIGHT}}", html.escape(r["notice"]))
-                     .replace("{{JSONLD}}", json_ld(shown, config, r, site_url))
-                     .replace("{{OG_IMAGE}}", f"{site_url}/img/og.jpg" if og_written else ""))
+    # One template, four pages: home (/), work/, collections/, about/.
+    template_page = (OUT / "index.html").read_text()
+    ld = json_ld(shown, config, r, site_url)
+    for page, folder, label in PAGES:
+        root = "../" if folder else ""
+        page_title = title if page == "home" else f"{label} — {title}"
+        text = (template_page
+                .replace("{{PAGE}}", page).replace("{{ROOT}}", root)
+                .replace("{{TITLE}}", page_title)
+                .replace("{{DESCRIPTION}}", desc)
+                .replace("{{AUTHOR}}", html.escape(r["holder"]))
+                .replace("{{COPYRIGHT}}", html.escape(r["notice"]))
+                .replace("{{JSONLD}}", ld if page in ("home", "work") else "{}")
+                .replace("{{OG_IMAGE}}", f"{site_url}/img/og.jpg" if og_written else ""))
+        target = OUT / folder / "index.html" if folder else OUT / "index.html"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
     # Share pages for shown photos (hidden ones get none).
     template = (OUT / "photo.html").read_text()
     (OUT / "photo.html").unlink()
@@ -1063,7 +1075,8 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
     # Version-stamp local scripts/styles everywhere; the editor app compares
     # its version with version.json to pick up a new build without waiting.
     version = site_version()
-    for page in [OUT / "index.html", OUT / "edit" / "index.html", *OUT.glob("p/*/index.html")]:
+    for page in [OUT / "index.html", OUT / "edit" / "index.html", *(OUT / f / "index.html" for _, f, _ in PAGES if f),
+                 *OUT.glob("p/*/index.html")]:
         text = stamp_assets(page.read_text(), version)
         if page.parent.name == "edit":
             text = text.replace("</head>", f'  <meta name="app-version" content="{version}">\n</head>', 1)

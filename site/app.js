@@ -11,6 +11,21 @@
     return d && !isNaN(d) ? d.toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "";
   };
 
+  // ---------------- pages ----------------
+  // The same page template is built as home, work/, collections/ and about/
+  // (body data-page / data-root); ROOT leads back to the site root.
+  const PAGE = /^(home|work|collections|about)$/.test(document.body.dataset.page || "") ? document.body.dataset.page : "home";
+  const ROOT = /^(\.\.\/)*$/.test(document.body.dataset.root || "") ? document.body.dataset.root || "" : "";
+  // Old links to the one-page site (#photo-…, #collection-…) now live on Work.
+  if (PAGE === "home" && /^#(photo|collection)-/.test(location.hash)) {
+    location.replace(ROOT + "work/" + location.hash);
+    return;
+  }
+  for (const a of document.querySelectorAll("[data-nav]")) if (a.dataset.nav === PAGE) a.setAttribute("aria-current", "page");
+  if (PAGE === "work") { // the full gallery's heading
+    const t = $("work-title"); t.textContent = "All "; const em = document.createElement("em"); em.textContent = "work"; t.appendChild(em);
+  }
+
   // ---------------- visitor counts (GoatCounter, optional) ----------------
   // No cookies, no third-party script: each count is a tiny image request to
   // the site's GoatCounter (config "goatcounter"). Not counted: browsers that
@@ -94,7 +109,12 @@
       const url = `https://www.instagram.com/${encodeURIComponent(handle)}/`;
       for (const a of [$("nav-insta"), $("marquee")]) { a.href = url; a.hidden = false; }
       const contact = $("rights-contact");
-      contact.append("For licensing, prints, or permission to use an image, message ");
+      const email = validEmail(cfg.prints_email);
+      contact.append("For licensing, prints, or permission to use an image, ");
+      if (email) {
+        const m = document.createElement("a"); m.href = "mailto:" + email; m.textContent = email;
+        contact.append("email ", m, " or message ");
+      } else contact.append("message ");
       const link = document.createElement("a");
       link.href = url; link.target = "_blank"; link.rel = "noopener"; link.textContent = "@" + handle;
       contact.append(link, " on Instagram.");
@@ -112,15 +132,24 @@
     }
 
     if (cfg.about) {
-      // Paragraphs split on blank lines; the first is the large lead. Text only.
+      // Paragraphs split on blank lines. Text only.
       const box = $("about-text"); box.textContent = "";
-      String(cfg.about).split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean).forEach((t, i) => {
-        const p = document.createElement("p"); p.className = i ? "about-more" : "about-lead"; p.textContent = t; box.appendChild(p);
+      String(cfg.about).split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean).forEach((t) => {
+        const p = document.createElement("p"); p.textContent = t; box.appendChild(p);
       });
-      $("about").hidden = false;
-      $("nav-about").hidden = false;
+    }
+    printsEmail = validEmail(cfg.prints_email);
+    if (printsEmail) {
+      const t = $("prints-text"); t.textContent = "";
+      const m = document.createElement("a"); m.href = "mailto:" + printsEmail; m.textContent = printsEmail;
+      t.append("Interested in a print, or in licensing a photograph? Email ", m,
+        ", with the photo's title or link (the Inquire button under each photo fills that in).");
+      $("prints").hidden = false;
+      $("lb-inquire").hidden = false;
     }
   }
+
+  function validEmail(v) { return typeof v === "string" && /^[^@\s<>"]+@[^@\s<>"]+\.[a-z]{2,}$/i.test(v.trim()) ? v.trim() : ""; }
 
   // ---------------- hero slideshow ----------------
   // Highlighted photos (set in the editor app) are the slideshow, in main page
@@ -138,7 +167,13 @@
     const slides = picks.map((p, i) => {
       const s = document.createElement("div"); s.className = "slide";
       s.appendChild(makeImg(p, "(max-width: 860px) 100vw, 45vw", i === 0));
-      s.addEventListener("click", () => { if (!photos.includes(p)) groups.select(null); openPhoto(photos.indexOf(p), s.firstChild); });
+      s.addEventListener("click", () => {
+        if (!photos.includes(p)) {
+          if (PAGE === "home") { location.href = ROOT + "work/#photo-" + encodeURIComponent(p.id); return; }
+          groups.select(null);
+        }
+        openPhoto(photos.indexOf(p), s.firstChild);
+      });
       s.style.cursor = "zoom-in";
       media.insertBefore(s, $("hero-index"));
       return s;
@@ -301,6 +336,7 @@
     $("lb-caption").textContent = label;
     $("lb-info").textContent = label; // phones: own line (the bar is too narrow)
     $("lb-info").hidden = !label;
+    if (printsEmail) $("lb-inquire").href = inquireHref(p);
     counter.event(`photo/${p.id}`, p.caption || monthYear(p.taken));
     history.replaceState(null, "", `#photo-${p.id}`);
     for (const d of [1, -1]) { // warm the neighbours
@@ -368,8 +404,7 @@
   $("lb-share").addEventListener("click", async () => {
     const p = photos[current];
     if (!p) return;
-    const base = location.href.split("#")[0];
-    const url = p.page ? new URL(`p/${encodeURIComponent(p.id)}/`, base).href : `${base}#photo-${p.id}`;
+    const url = new URL(p.page ? `${ROOT}p/${encodeURIComponent(p.id)}/` : `${ROOT}work/#photo-${encodeURIComponent(p.id)}`, location.href).href;
     counter.event(`share/${p.id}`, p.caption || "Share");
     const btn = $("lb-share"), say = (t) => { btn.textContent = t; setTimeout(() => { btn.textContent = "Share"; }, 1800); };
     if (navigator.share) {
@@ -378,6 +413,15 @@
     }
     try { await navigator.clipboard.writeText(url); say("Link copied"); } catch { prompt("Copy this link:", url); }
   });
+  // Inquire: an email link to the prints address with the photo's title and
+  // link filled in (kept up to date by fillBar for the photo on screen).
+  let printsEmail = "";
+  function inquireHref(p) {
+    const title = p.caption || `Photo from ${monthYear(p.taken) || "the gallery"}`;
+    const link = new URL(p.page ? `${ROOT}p/${encodeURIComponent(p.id)}/` : `${ROOT}work/#photo-${encodeURIComponent(p.id)}`, location.href).href;
+    return `mailto:${printsEmail}?subject=${encodeURIComponent("Print inquiry: " + title)}&body=${encodeURIComponent(`Hi Alex,\n\nI'm interested in a print of "${title}".\n${link}\n\nSize / questions:\n`)}`;
+  }
+  $("lb-inquire").addEventListener("click", () => { const p = photos[current]; if (p) counter.event(`inquire/${p.id}`, p.caption || "Inquire"); });
   $("lb-prev").addEventListener("click", () => step(-1));
   $("lb-next").addEventListener("click", () => step(1));
   $("lb-stage").addEventListener("click", (e) => { if (e.target === e.currentTarget) closePhoto(); });
@@ -528,6 +572,7 @@
         if (scroll) $("work").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
       },
       hash: () => (active ? "#collection-" + active : ""),
+      parse: (raw) => clean(raw), // [{name, slug, items}] for the header link and the Collections page
     };
     addEventListener("hashchange", () => {
       const m = location.hash.match(/^#collection-(.+)$/);
@@ -543,10 +588,28 @@
     rt = setTimeout(() => { if (masonry.clientWidth !== lastW) { lastW = masonry.clientWidth; layout(); } }, 150);
   });
 
-  const cfgReady = fetch("config.json").then((r) => r.json()).catch(() => ({}));
+  // Collections page: one cover (the series' first photo, shown whole) per
+  // collection, linking to it on the Work page.
+  function renderCollections(list) {
+    const grid = $("cgrid"); grid.textContent = "";
+    for (const c of list) {
+      const p = c.items[0];
+      const a = document.createElement("a"); a.className = "ccard"; a.href = `${ROOT}work/#collection-${c.slug}`;
+      const f = document.createElement("span"); f.className = "cframe";
+      f.appendChild(makeImg(p, "(max-width: 700px) 100vw, 33vw", false));
+      const n = document.createElement("span"); n.className = "cname"; n.textContent = c.name;
+      const k = document.createElement("span"); k.className = "ccount mono"; k.textContent = `${c.items.length} photograph${c.items.length === 1 ? "" : "s"}`;
+      a.append(f, n, k);
+      a.addEventListener("click", () => counter.event(`collection/${c.slug}`, c.name));
+      grid.appendChild(a);
+    }
+    $("colls-empty").hidden = list.length > 0;
+  }
+
+  const cfgReady = fetch(ROOT + "config.json").then((r) => r.json()).catch(() => ({}));
   Promise.all([
     cfgReady,
-    fetch("photos.json").then((r) => r.json()).catch(() => []),
+    fetch(ROOT + "photos.json").then((r) => r.json()).catch(() => []),
     cfgReady.then((cfg) => loadLive(cfg.data_url)),
   ]).then(([cfg, list, live]) => {
     // Live collections when the data repo answered, else the copy baked in at build.
@@ -560,15 +623,31 @@
     // answered, else the flag baked in at build.
     const vis = isObj(live) ? window.PhotoMeta.visibility(live) : null;
     const listed = Array.isArray(list) ? applyLive(list, live) : [];
+    // Image paths in photos.json are relative to the site root.
+    for (const p of listed) for (const s of p.src || []) if (!/^(https?:|\/)/.test(s.url)) s.url = ROOT + s.url;
     allPhotos = photos = listed.filter((p) => (vis ? window.PhotoMeta.isShown(p.id, p.added, vis) : !p.draft));
     cursor();
-    if (!photos.length) { $("empty").hidden = false; $("hero-media").hidden = true; return; }
-    hero(highlightsFrom(rawHighlights));
+    const collections = groups.parse(rawCollections);
+    $("nav-collections").hidden = !collections.length;
+    if (PAGE === "collections") { renderCollections(collections); return; }
+    if (PAGE === "about") return;
+    if (!allPhotos.length) { $("empty").hidden = false; $("hero-media").hidden = true; return; }
+    const highlights = highlightsFrom(rawHighlights);
+    if (PAGE === "home") {
+      // Home: the intro, the slideshow, and the highlighted photos (or, with
+      // none marked yet, the first few), with a link to all the work.
+      hero(highlights);
+      photos = highlights.length ? highlights : allPhotos.slice(0, 9);
+      const more = `View all ${allPhotos.length} photographs →`;
+      $("view-all").textContent = "View all work →"; $("view-all-2").textContent = more;
+    }
     buildTiles();
     lastW = masonry.clientWidth;
     layout();
-    groups.init(rawCollections);
-    const m = location.hash.match(/^#photo-(.+)$/);
-    if (m) openPhoto(photos.findIndex((p) => p.id === m[1]), null);
+    if (PAGE === "work") {
+      groups.init(rawCollections);
+      const m = location.hash.match(/^#photo-(.+)$/);
+      if (m) openPhoto(photos.findIndex((p) => p.id === m[1]), null);
+    }
   });
 })();

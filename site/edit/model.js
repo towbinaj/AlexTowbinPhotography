@@ -12,7 +12,8 @@
 //     "published":   ["<id>", …],                        // released (overrides drafts_from)
 //     "drafts_from": "2026-11-18T16:45:00Z",             // photos added after this start hidden
 //     "on_work":     ["<id>", …],                        // checked "On Work page"
-//     "off_work":    ["<id>", …]                         // unchecked (new photos start off: meta.js)
+//     "off_work":    ["<id>", …],                        // unchecked (new photos start off: meta.js)
+//     "no_place":    ["<id>", …]                         // location removed: no automatic GPS place either
 //   }
 // Everything read from the repo is untrusted and goes through normalize().
 (function (root) {
@@ -88,7 +89,7 @@
     }
     const vis = Meta.visibility(d);
     const out = { titles, order: idList(d.order), collections, highlights: idList(d.highlights), tags, photo_tags, locations,
-      hidden: idList(d.hidden), published: idList(d.published), on_work: idList(d.on_work), off_work: idList(d.off_work) };
+      hidden: idList(d.hidden), published: idList(d.published), on_work: idList(d.on_work), off_work: idList(d.off_work), no_place: idList(d.no_place) };
     if (vis.from !== null) out.drafts_from = d.drafts_from;
     return out;
   }
@@ -97,6 +98,9 @@
   const isShown = (doc, p) => Meta.isShown(p.id, p.added, Meta.visibility(doc));
   // Is it in the Work page's list? (the "On Work page" checkmark)
   const onWork = (doc, p) => Meta.onWork(p.id, p.added, Meta.work(doc));
+  // The photo's location: chosen in the editor, else automatic from GPS.
+  const placeOf = (doc, p) => Meta.placeFor(p.id, doc.locations[p.id], new Set(doc.no_place), p.auto_place);
+  const isAutoPlace = (doc, p) => !doc.locations[p.id] && !!placeOf(doc, p);
 
   const copy = (doc) => ({
     titles: { ...doc.titles },
@@ -110,6 +114,7 @@
     published: doc.published.slice(),
     on_work: doc.on_work.slice(),
     off_work: doc.off_work.slice(),
+    no_place: doc.no_place.slice(),
     ...(doc.drafts_from ? { drafts_from: doc.drafts_from } : {}),
   });
 
@@ -221,6 +226,9 @@
     if (has(change, "place")) {
       const pl = Meta.cleanPlace(change.place);
       if (pl) out.locations[id] = pl; else delete out.locations[id];
+      // Removing a location also turns off the automatic one from GPS.
+      out.no_place = out.no_place.filter((x) => x !== id);
+      if (!pl) out.no_place.push(id);
     }
     if (has(change, "shown")) {
       // Explicit either way, so it overrides the drafts_from rule.
@@ -331,6 +339,7 @@
     if (g0 !== g1) parts.push(g1 ? `tags ${(after.photo_tags[id] || []).join(", ")}` : "tags removed");
     const l0 = Meta.placeKey(before.locations[id]), l1 = Meta.placeKey(after.locations[id]);
     if (l0 !== l1) parts.push(l1 ? `location ${Meta.placeLabel(after.locations[id])}` : "location removed");
+    else if (!l1 && !before.no_place.includes(id) && after.no_place.includes(id)) parts.push("location removed");
     const s0 = before.published.includes(id) ? 1 : before.hidden.includes(id) ? -1 : 0;
     const s1 = after.published.includes(id) ? 1 : after.hidden.includes(id) ? -1 : 0;
     if (s0 !== s1 && s1) parts.push(s1 > 0 ? "shown on site" : "hidden from site");
@@ -349,11 +358,12 @@
     return JSON.stringify({ titles, order: doc.order, collections: doc.collections, highlights: doc.highlights,
       tags: doc.tags, photo_tags: sortKeys(doc.photo_tags), locations: sortKeys(doc.locations),
       hidden: doc.hidden, published: doc.published, ...(doc.drafts_from ? { drafts_from: doc.drafts_from } : {}),
-      ...(doc.on_work.length ? { on_work: doc.on_work } : {}), ...(doc.off_work.length ? { off_work: doc.off_work } : {}) }, null, 2) + "\n";
+      ...(doc.on_work.length ? { on_work: doc.on_work } : {}), ...(doc.off_work.length ? { off_work: doc.off_work } : {}),
+      ...(doc.no_place.length ? { no_place: doc.no_place } : {}) }, null, 2) + "\n";
   }
 
   const api = { normalize, orderPhotos, collectionOf, applyChange, describe, serialize, cleanName, MAX_NAME,
-    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, onWork, mainPosFromShown,
+    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, onWork, placeOf, isAutoPlace, mainPosFromShown,
     reorderMain, reorderCollection, reorderHighlights, sameDoc };
   root.EditModel = api;
   if (typeof module !== "undefined") module.exports = api;

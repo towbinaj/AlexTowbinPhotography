@@ -147,7 +147,11 @@ background) and opens full screen.
   plus inhabited islands ("Santorini Island", "Milos Island"), shown in
   English where GeoNames has it ("Heraklion", not "Irákleion"; either
   spelling finds it); for a smaller place choose its state/region. *Photo GPS* separately says whether the image file itself
-  kept its location (yes/no only).
+  kept its location (yes/no only). **Photos with GPS get their nearest town
+  or island automatically** (shown as "… · from photo GPS"): the build reads
+  the position only to pick the town and never stores or publishes it. Your
+  own choice always wins; **Remove** clears it for good (no automatic place
+  either).
 - **Search** (top of the grid) by title, place, tag or collection; filters
   include *Shown* (on the site), *Hidden*, *Untitled* and *No location*.
 - **On Work page:** a checkmark on each photo. Photos added to the album from

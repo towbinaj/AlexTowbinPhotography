@@ -495,12 +495,13 @@
     }
     const ptags = isObj(data.photo_tags) ? data.photo_tags : {}, locs = isObj(data.locations) ? data.locations : {};
     const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+    const removed = M.noPlace(data);
     for (const p of list) {
       const names = own(ptags, p.id) && Array.isArray(ptags[p.id]) ? ptags[p.id].slice(0, 30) : [];
       const tags = [];
       for (const t of names) { const n = typeof t === "string" ? lib.get(M.cleanTag(t).toLowerCase()) : undefined; if (n && !tags.includes(n)) tags.push(n); }
       if (tags.length) p.tags = tags; else delete p.tags;
-      const pl = own(locs, p.id) ? M.cleanPlace(locs[p.id]) : null;
+      const pl = M.placeFor(p.id, own(locs, p.id) ? locs[p.id] : null, removed, p.auto_place);
       if (pl) p.place = pl; else delete p.place;
     }
     if (!Array.isArray(data.order)) return list;

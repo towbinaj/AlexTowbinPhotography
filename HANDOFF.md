@@ -181,6 +181,16 @@ the gallery (hidden until a collection exists), `#collection-<slug>` deep
 links, heading becomes the collection name, lightbox steps within it. Built
 from live data, baked fallback in `config.json` `collections`
 (`load_collections()`). `#edit` forces *All* (positions are global).
+**Automatic place from GPS (2026-11-27):** owner chose "apply automatically".
+`read_gps()` (memory only) → `nearest_place()`: GeoNames town/island with the
+smallest distance ÷ reach (reach = max(1 km, 0.02·√pop)), ≤60 km; positions
+in build-only `scripts/place_coords.json` (from `make_places.py`, aligned with
+places.json). Stored per photo as `auto_place` (+`auto_v`) in the rendered
+cache and photos.json; existing cached photos with GPS re-download their
+original once (`needs_original()`). Shown place = `placeFor()`/`place_for()`:
+editor choice, else auto unless in `no_place` (set by Remove). Spot checks:
+downtown Cincinnati→Cincinnati (not Newport), Oia→Oía, Plaka→Milos.
+
 **Faster big batches (2026-11-27):** new originals download 8 at a time
 (`fetch_original`), new photos are processed on all CPUs (`prerender()`,
 ProcessPool; output identical to one-at-a-time, 3.7× faster on 4 cores) and

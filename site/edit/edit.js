@@ -140,7 +140,7 @@
   function filters() {
     const untitled = all.filter((p) => !doc.titles[p.id]).length;
     const loose = all.filter((p) => !M.collectionOf(doc, p.id)).length;
-    const noPlace = all.filter((p) => !doc.locations[p.id]).length;
+    const noPlace = all.filter((p) => !M.placeOf(doc, p)).length;
     const hiddenN = all.filter((p) => !M.isShown(doc, p)).length;
     const offWork = all.filter((p) => !M.onWork(doc, p)).length;
     const onWorkN = all.filter((p) => M.isShown(doc, p) && M.onWork(doc, p)).length;
@@ -152,8 +152,8 @@
   function matches(p) {
     const words = fold(query).split(/\s+/).filter(Boolean);
     if (!words.length) return true;
-    const pl = doc.locations[p.id] || {};
-    const h = fold([doc.titles[p.id], monthYear(p.taken), Meta.placeLabel(doc.locations[p.id]), pl.region, pl.country,
+    const pl = M.placeOf(doc, p) || {};
+    const h = fold([doc.titles[p.id], monthYear(p.taken), Meta.placeLabel(M.placeOf(doc, p)), pl.region, pl.country,
       ...(doc.photo_tags[p.id] || []), (M.collectionOf(doc, p.id) || {}).name].filter(Boolean).join(" | "));
     return words.every((w) => h.includes(w));
   }
@@ -163,7 +163,7 @@
   function photosForFilter(f) {
     const list = ordered();
     if (f === "untitled") return list.filter((p) => !doc.titles[p.id]);
-    if (f === "noplace") return list.filter((p) => !doc.locations[p.id]);
+    if (f === "noplace") return list.filter((p) => !M.placeOf(doc, p));
     if (f === "hidden") return list.filter((p) => !M.isShown(doc, p));
     if (f === "shown") return list.filter((p) => M.isShown(doc, p));
     if (f === "offwork") return list.filter((p) => !M.onWork(doc, p));
@@ -214,7 +214,7 @@
       const c = M.collectionOf(doc, p.id);
       const star = doc.highlights.includes(p.id);
       const meta = el("span", "meta mono" + (star ? " high" : ""), (star ? "★ " : "") + (c ? `${c.name} · ${c.pos}` : star ? "" : "—"));
-      const pl = doc.locations[p.id], tg = doc.photo_tags[p.id] || [];
+      const pl = M.placeOf(doc, p), tg = doc.photo_tags[p.id] || [];
       const meta2 = el("span", "meta mono", [pl ? Meta.placeLabel(pl) : "", tg.length ? `${tg.length} tag${tg.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ") || "No location");
       a.append(frame, cap, meta, meta2);
       if (hiddenNow) a.appendChild(el("span", "meta mono hid", "Hidden · not on the site"));
@@ -231,7 +231,7 @@
   // ---------------- detail ----------------
   const NEW = " new"; // never a real name: names are trimmed
   let base = null; // field values when the photo was opened, to detect changes
-  let pendingTags = [], pendingPlace = null;
+  let pendingTags = [], pendingPlace = null, autoKey = ""; // autoKey: the automatic (GPS) place, if that's what's shown
   function values() {
     const coll = $("f-coll").value === NEW ? M.cleanName($("f-newcoll").value, clean) : $("f-coll").value;
     return { title: clean($("f-title").value), collection: coll, cpos: $("f-cpos").value, high: $("f-high").checked, mpos: $("f-mpos").value, shown: $("f-shown").checked, work: $("f-work").checked,
@@ -278,7 +278,8 @@
     $("f-work").checked = M.onWork(doc, p);
     shownNote();
     pendingTags = (doc.photo_tags[p.id] || []).slice();
-    pendingPlace = doc.locations[p.id] || null;
+    pendingPlace = M.placeOf(doc, p);
+    autoKey = M.isAutoPlace(doc, p) ? Meta.placeKey(pendingPlace) : "";
     $("f-tag-in").value = "";
     renderTags(); renderPlace();
     fillMainPos(p, M.isShown(doc, p), M.onWork(doc, p));
@@ -444,7 +445,8 @@
   // ---------------- location on a photo ----------------
   function renderPlace() {
     const pl = $("f-place");
-    pl.textContent = pendingPlace ? Meta.placeLabel(pendingPlace) : "Not set";
+    const auto = !!pendingPlace && autoKey === Meta.placeKey(pendingPlace);
+    pl.textContent = pendingPlace ? Meta.placeLabel(pendingPlace) + (auto ? " · from photo GPS" : "") : "Not set";
     pl.classList.toggle("none", !pendingPlace);
     $("f-place-clear").hidden = !pendingPlace;
     $("f-place-pick").textContent = pendingPlace ? "Change" : "Choose";

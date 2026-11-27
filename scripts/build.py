@@ -454,6 +454,91 @@ def has_location(im: Image.Image) -> bool:
     return 2 in gps and 4 in gps  # GPSLatitude and GPSLongitude
 
 
+def read_gps(im: Image.Image) -> tuple[float, float] | None:
+    """The original's GPS position, for finding its nearest town. Used in
+    memory only: never stored, logged or published."""
+    try:
+        gps = im.getexif().get_ifd(0x8825)
+
+        def deg(v):
+            d, m, s = (float(x) for x in v)
+            return d + m / 60 + s / 3600
+        lat, lon = deg(gps[2]), deg(gps[4])
+        if str(gps.get(1, "N")).upper().startswith("S"):
+            lat = -lat
+        if str(gps.get(3, "E")).upper().startswith("W"):
+            lon = -lon
+    except Exception:
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180) or (lat == 0 and lon == 0):
+        return None
+    return lat, lon
+
+
+# The editor's built-in places list plus build-only town positions (same order).
+PLACES_FILE = SITE_SRC / "edit" / "places.json"
+COORDS_FILE = ROOT / "scripts" / "place_coords.json"
+AUTO_PLACE_MAX_KM = 60   # farther than this from any town or island: no automatic place
+AUTO_PLACE_VERSION = 1   # bump to recompute every photo's automatic place
+_places_cache: dict = {}
+
+
+def _places():
+    if "rows" not in _places_cache:
+        try:
+            p = json.loads(PLACES_FILE.read_text())
+            c = json.loads(COORDS_FILE.read_text())["coords"]
+            ok = len(c) == len(p["cities"])
+        except (OSError, ValueError, KeyError):
+            ok = False
+        _places_cache["rows"] = (p, c) if ok else None
+    return _places_cache["rows"]
+
+
+def nearest_place(lat: float, lon: float, places=None) -> dict | None:
+    """The town (1,000+ people) or inhabited island a position belongs to, as a
+    city-level place like the editor's picks, or None if none is within
+    AUTO_PLACE_MAX_KM. Bigger places reach further: the pick is the place with
+    the smallest distance relative to its reach (about 0.02 km × √population,
+    at least 1 km), so downtown Cincinnati is Cincinnati, not Newport across
+    the river, while a photo in a suburb still gets the suburb."""
+    import math
+    data = places or _places()
+    if not data:
+        return None
+    p, coords = data
+    k = math.cos(math.radians(lat))
+    best, best_score = -1, float("inf")
+    for i, c in enumerate(coords):
+        if c[0] is None or abs(c[0] - lat) > 0.6:  # ~65 km: cheap pre-filter
+            continue
+        dlon = (c[1] - lon + 540) % 360 - 180
+        km = math.hypot(c[0] - lat, dlon * k) * 111.2
+        if km > AUTO_PLACE_MAX_KM:
+            continue
+        reach = max(1.0, 0.02 * math.sqrt(c[2] if len(c) > 2 and c[2] else 0))
+        if km / reach < best_score:
+            best, best_score = i, km / reach
+    if best < 0:
+        return None
+    gid, name, ri, ci = p["cities"][best][:4]
+    cc, country = p["countries"][ci]
+    raw = {"level": "city", "gid": gid, "city": name, "country": country, "cc": cc}
+    if ri >= 0:
+        raw["region"] = p["regions"][ri][1]
+    return clean_place(raw)
+
+
+def auto_place_for(source: Path) -> dict | None:
+    """Nearest place to where the original was taken, from its GPS (if any)."""
+    try:
+        with Image.open(source) as im:
+            pos = read_gps(im)
+    except Exception:
+        return None
+    return nearest_place(*pos) if pos else None
+
+
 def render_images(photo: Photo, out_dir: Path, trim: bool = True,
                   meta: tuple[bytes, bytes] | None = None) -> dict | None:
     try:
@@ -843,12 +928,31 @@ def on_work(pid: str, added: str, w: dict) -> bool:
     return not (t is not None and t >= WORK_FROM)
 
 
-def apply_meta(entries: list[dict], tags: dict[str, list[str]], places: dict[str, dict]) -> None:
+def place_for(pid: str, places: dict[str, dict], no_place: set[str], auto: dict | None) -> dict | None:
+    """The place shown for a photo (kept identical to placeFor() in
+    site/meta.js): the one chosen in the editor; else the automatic nearest
+    town from the photo's GPS, unless the owner removed the location."""
+    if places.get(pid):
+        return places[pid]
+    if pid in no_place:
+        return None
+    return clean_place(auto) if auto else None
+
+
+def load_no_place(path: Path = CURATION) -> set[str]:
+    data = _read_json(path)
+    raw = data.get("no_place") if isinstance(data, dict) else None
+    return {x for x in (raw[:MAX_ORDER] if isinstance(raw, list) else []) if isinstance(x, str) and 0 < len(x) <= MAX_ID}
+
+
+def apply_meta(entries: list[dict], tags: dict[str, list[str]], places: dict[str, dict],
+               no_place: set[str] | None = None) -> None:
     for e in entries:
         if tags.get(e["id"]):
             e["tags"] = tags[e["id"]]
-        if places.get(e["id"]):
-            e["place"] = places[e["id"]]
+        pl = place_for(e["id"], places, no_place or set(), e.get("auto_place"))
+        if pl:
+            e["place"] = pl
 
 
 def load_titles(path: Path = LEGACY_TITLES) -> dict[str, str]:
@@ -1012,12 +1116,24 @@ def cached_entry(pid: str, key: str, cache: Path = RENDER_CACHE) -> dict | None:
     return data
 
 
+def needs_original(pid: str, key: str, cache: Path = RENDER_CACHE) -> bool:
+    """Whether the build must download this photo's original: not processed
+    yet, or it has GPS but its automatic place hasn't been worked out."""
+    data = cached_entry(pid, key, cache)
+    return data is None or (bool(data.get("located")) and data.get("auto_v") != AUTO_PLACE_VERSION)
+
+
 def render_cached(photo: Photo, key: str, trim: bool, meta, out: Path, cache: Path = RENDER_CACHE) -> dict | None:
     """Photo entry for photos.json, with its images copied into out/img/. Uses
     the cache when possible; otherwise processes the original and caches it."""
     data = cached_entry(photo.id, key, cache) or render_to_cache(photo, key, trim, meta, cache)
     if data is None:
         return None
+    if data.get("auto_v") != AUTO_PLACE_VERSION and photo.source is not None:
+        # Rendered before automatic places existed: read the original's GPS once.
+        data = {**data, "auto_place": auto_place_for(photo.source) if data.get("located") else None,
+                "auto_v": AUTO_PLACE_VERSION}
+        (cache / photo.id / "entry.json").write_text(json.dumps(data))
     for f in (cache / photo.id / "img").iterdir():
         target = out / "img" / f.name
         try:
@@ -1026,7 +1142,8 @@ def render_cached(photo: Photo, key: str, trim: bool, meta, out: Path, cache: Pa
             shutil.copy2(f, target)
     return {"id": photo.id, "w": data["w"], "h": data["h"], "caption": photo.caption,
             "taken": photo.taken, "added": photo.added, "lqip": data["lqip"], "src": data["src"],
-            "located": data["located"], "_og": tuple(data["og"])}
+            "located": data["located"], "_og": tuple(data["og"]),
+            **({"auto_place": data["auto_place"]} if data.get("auto_place") else {})}
 
 
 def render_to_cache(photo: Photo, key: str, trim: bool, meta, cache: Path = RENDER_CACHE) -> dict | None:
@@ -1047,7 +1164,8 @@ def render_to_cache(photo: Photo, key: str, trim: bool, meta, cache: Path = REND
     og.save(d / "img" / f"{photo.id}-og.jpg", "JPEG", quality=82,
             **({"exif": meta[0], "xmp": meta[1]} if meta else {}))
     data = {"key": key, "w": e["w"], "h": e["h"], "lqip": e["lqip"], "src": e["src"],
-            "located": e["located"], "og": list(og.size)}
+            "located": e["located"], "og": list(og.size),
+            "auto_place": auto_place_for(photo.source) if e["located"] else None, "auto_v": AUTO_PLACE_VERSION}
     (d / "entry.json").write_text(json.dumps(data))
     return data
 
@@ -1121,7 +1239,7 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True, img_base: s
         shutil.rmtree(cache, ignore_errors=True)
 
     apply_titles(entries, titles)
-    apply_meta(entries, *load_meta())
+    apply_meta(entries, *load_meta(), load_no_place())
     # Hidden photos stay in photos.json (the editor shows them, and releasing
     # one is instant) but are flagged, left out of the JSON-LD and never used
     # for the link preview. Not private: see README.
@@ -1334,7 +1452,7 @@ def main() -> int:
     if args.demo:
         photos = demo_photos(args.demo)
     elif token:
-        photos = download_album(token, skip=lambda pid: cached_entry(pid, key) is not None)
+        photos = download_album(token, skip=lambda pid: not needs_original(pid, key))
         if not photos:
             # Fail loudly rather than publish an empty site over a good one.
             print("iCloud returned no photos; refusing to deploy an empty gallery.", file=sys.stderr)

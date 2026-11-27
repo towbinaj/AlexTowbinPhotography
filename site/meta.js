@@ -100,7 +100,21 @@
     return !(Number.isFinite(t) && t >= WORK_FROM);
   }
 
-  const api = { cleanTag, cleanPlace, placeLabel, placeKey, MAX_TAG, visibility, isShown, work, onWork };
+  // The place shown for a photo (kept identical to place_for() in build.py):
+  // the one chosen in the editor; else the automatic nearest town from the
+  // photo's GPS (worked out by the build), unless the owner removed it.
+  function noPlace(data) {
+    const d = isObj(data) ? data : {};
+    return new Set(Array.isArray(d.no_place) ? d.no_place.slice(0, 5000).filter((x) => typeof x === "string" && x.length > 0 && x.length <= 64) : []);
+  }
+  function placeFor(id, chosen, removed, auto) {
+    const pl = cleanPlace(chosen);
+    if (pl) return pl;
+    if (removed.has(id)) return null;
+    return auto ? cleanPlace(auto) : null;
+  }
+
+  const api = { cleanTag, cleanPlace, placeLabel, placeKey, MAX_TAG, visibility, isShown, work, onWork, noPlace, placeFor };
   root.PhotoMeta = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

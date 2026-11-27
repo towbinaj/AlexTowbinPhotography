@@ -32,6 +32,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "site" / "edit" / "places.json"
+# Build-only: each place's position (same order as places.json cities), used
+# to give photos with GPS their nearest town. Town positions only; never
+# deployed, and the photos' own coordinates are never stored.
+COORDS = ROOT / "scripts" / "place_coords.json"
 BASE = "https://download.geonames.org/export/dump/"
 # Parts of a city (Zürich (Kreis 3)), historical, abandoned and destroyed places.
 SKIP_CODES = {"PPLX", "PPLH", "PPLQ", "PPLW"}
@@ -182,7 +186,11 @@ def make(src: Path | None = None) -> dict:
         if cc not in countries or not name or r[7] in SKIP_CODES or gid in seen:
             continue
         seen.add(gid)
-        cities.append((pop, gid, name, ascii_name, cc, f"{cc}.{a1}" if f"{cc}.{a1}" in admin1 else None))
+        try:
+            lat, lon = round(float(r[4]), 2), round(float(r[5]), 2)
+        except ValueError:
+            lat = lon = None
+        cities.append((pop, gid, name, ascii_name, cc, f"{cc}.{a1}" if f"{cc}.{a1}" in admin1 else None, lat, lon))
     cities.sort(key=lambda c: (-c[0], c[2]))
 
     used_cc = sorted({c[4] for c in cities} | set(countries), key=lambda cc: countries[cc])
@@ -193,7 +201,9 @@ def make(src: Path | None = None) -> dict:
 
     english = english_names(read_english(src), {c[1] for c in cities})
     out_cities = []
-    for _pop, gid, name, ascii_name, cc, region in cities:
+    coords = []
+    for pop, gid, name, ascii_name, cc, region, lat, lon in cities:
+        coords.append([lat, lon, pop])
         shown, aliases = display_and_aliases(name, ascii_name, english.get(gid, []))
         row = [gid, shown, r_index[region] if region else -1, c_index[cc]]
         if aliases:
@@ -204,13 +214,17 @@ def make(src: Path | None = None) -> dict:
         "countries": [[cc, countries[cc]] for cc in used_cc],
         "regions": [[code, admin1[code], c_index[code.split(".")[0]]] for code in region_codes],
         "cities": out_cities,
+        "_coords": coords,  # split off into COORDS by main()
     }
 
 
 def main() -> int:
     src = Path(sys.argv[1]) if len(sys.argv) > 1 else None
     data = make(src)
+    coords = data.pop("_coords")
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n")
+    COORDS.write_text(json.dumps({"source": "GeoNames (geonames.org), CC BY 4.0", "coords": coords},
+                                 separators=(",", ":")) + "\n")
     print(f"{len(data['cities'])} cities, {len(data['regions'])} regions, "
           f"{len(data['countries'])} countries -> {OUT} ({OUT.stat().st_size // 1024} KB)")
     return 0

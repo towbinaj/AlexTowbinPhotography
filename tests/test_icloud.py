@@ -356,7 +356,7 @@ def test_model_normalize_rejects_junk():
                  "collections": [{"name": "Chicago at Night", "photos": ["a", "b"]},
                                  {"name": "Other", "photos": ["d"]}],
                  "highlights": ["a"], "tags": [], "photo_tags": {}, "locations": {},
-                 "hidden": [], "published": [], "on_work": [], "off_work": []}
+                 "hidden": [], "published": [], "on_work": [], "off_work": [], "no_place": []}
 
 
 def test_model_apply_change_moves_between_collections_and_reorders():
@@ -939,3 +939,120 @@ def test_download_album_fetches_in_parallel_keeps_order_and_drops_failures(tmp_p
     ids = [build.hashlib.sha1(f"c{i}".encode()).hexdigest()[:12] for i in (0, 1, 2, 4, 5)]
     assert [p.id for p in photos] == ids                    # album order, failed one dropped
     assert photos[1].source is None and all(p.source for i, p in enumerate(photos) if i != 1)
+
+
+# ---- automatic place from the photo's GPS (nearest town; coordinates never kept) ----
+
+def _gps_jpeg(path, lat, lon, size=(400, 300)):
+    from PIL import Image
+    from PIL.TiffImagePlugin import IFDRational as R
+    im = Image.new("RGB", size, "white")
+    exif = im.getexif()
+    def dms(v):
+        v = abs(v); d = int(v); m = int((v - d) * 60); s = round(((v - d) * 60 - m) * 60, 2)
+        return (R(d, 1), R(m, 1), R(int(s * 100), 100))
+    exif[0x8825] = {1: "N" if lat >= 0 else "S", 2: dms(lat), 3: "E" if lon >= 0 else "W", 4: dms(lon)}
+    im.save(path, exif=exif)
+    return path
+
+
+TOY_PLACES = ({"countries": [["GR", "Greece"], ["US", "United States"]],
+               "regions": [["GR.ESYE43", "Crete", 0], ["US.OH", "Ohio", 1]],
+               "cities": [[261745, "Heraklion", 0, 0], [4508722, "Cincinnati", 1, 1], [999, "Nowhere Rock", -1, 0]]},
+              [[35.33, 25.14, 137000], [39.13, -84.51, 309000], [None, None, 0]])
+
+
+def test_read_gps_and_nearest_place(tmp_path):
+    from PIL import Image
+    f = _gps_jpeg(tmp_path / "g.jpg", 35.3387, 25.1442)
+    with Image.open(f) as im:
+        lat, lon = build.read_gps(im)
+    assert abs(lat - 35.3387) < 1e-3 and abs(lon - 25.1442) < 1e-3
+    assert build.nearest_place(lat, lon, TOY_PLACES) == {"level": "city", "gid": 261745, "city": "Heraklion",
+                                                         "region": "Crete", "country": "Greece", "cc": "GR"}
+    assert build.nearest_place(39.10, -84.51, TOY_PLACES)["city"] == "Cincinnati"     # western hemisphere
+    assert build.nearest_place(36.5, 25.1, TOY_PLACES) is None                         # ~130 km out: too far
+    # Size matters: downtown Cincinnati is Cincinnati, not the small town across the river.
+    river = (TOY_PLACES[0] | {"cities": TOY_PLACES[0]["cities"] + [[4302529, "Newport", 1, 1]]},
+             TOY_PLACES[1] + [[39.09, -84.50, 15000]])
+    assert build.nearest_place(39.1031, -84.5120, river)["city"] == "Cincinnati"
+    assert build.nearest_place(39.0905, -84.4960, river)["city"] == "Newport"         # in Newport itself
+    f2 = _gps_jpeg(tmp_path / "s.jpg", -33.86, 151.2)
+    with Image.open(f2) as im:
+        assert build.read_gps(im)[0] < 0                                                # southern hemisphere
+    with Image.open(framed_path(tmp_path)) as im:
+        assert build.read_gps(im) is None
+
+
+def framed_path(tmp_path):
+    f = tmp_path / "nogps.jpg"
+    framed(200, 150, 5).save(f)
+    return f
+
+
+def test_auto_place_cached_and_existing_photos_upgraded(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "_places", lambda: TOY_PLACES)
+    cfg = {"name": "Test"}
+    key, meta = build.render_key(cfg), build.rights_metadata(build.rights(cfg))
+    cache, out = tmp_path / "cache", tmp_path / "out"
+    (out / "img").mkdir(parents=True)
+    src = _gps_jpeg(tmp_path / "o.jpg", 35.34, 25.13)
+    p = build.Photo(id="gps1", source=src)
+    e = build.render_cached(p, key, False, meta, out, cache)
+    assert e["located"] and e["auto_place"]["city"] == "Heraklion"
+    saved = json.loads((cache / "gps1" / "entry.json").read_text())
+    assert "35.34" not in json.dumps(saved) and saved["auto_v"] == build.AUTO_PLACE_VERSION   # no coordinates kept
+    assert not build.needs_original("gps1", key, cache)
+    # An entry from before automatic places: the original is fetched once and upgraded.
+    del saved["auto_v"], saved["auto_place"]
+    (cache / "gps1" / "entry.json").write_text(json.dumps(saved))
+    assert build.needs_original("gps1", key, cache)
+    out2 = tmp_path / "out2"
+    (out2 / "img").mkdir(parents=True)
+    e2 = build.render_cached(p, key, False, meta, out2, cache)
+    assert e2["auto_place"]["gid"] == 261745 and not build.needs_original("gps1", key, cache)
+    # Cached, no GPS: never needs the original again.
+    q = build.render_cached(build.Photo(id="plain", source=framed_path(tmp_path)), key, False, meta, out2, cache)
+    assert "auto_place" not in q and not build.needs_original("plain", key, cache)
+
+
+PLACE_CASES = [  # (id, chosen, auto)
+    ("chosen", {"level": "country", "country": "Italy", "cc": "IT"}, {"level": "city", "gid": 1, "city": "A", "country": "Greece", "cc": "GR"}),
+    ("auto", None, {"level": "city", "gid": 1, "city": "A", "country": "Greece", "cc": "GR"}),
+    ("removed", None, {"level": "city", "gid": 1, "city": "A", "country": "Greece", "cc": "GR"}),
+    ("none", None, None),
+    ("junk", {"level": "planet"}, {"level": "city", "gid": "x"}),
+]
+
+
+def test_place_for_matches_js():
+    import shutil, subprocess
+    removed = {"removed"}
+    py = [build.place_for(i, {i: build.clean_place(c)} if c and build.clean_place(c) else {}, removed, a) for i, c, a in PLACE_CASES]
+    assert [x and (x.get("city") or x.get("country")) for x in py] == ["Italy", "A", None, None, None]
+    node = shutil.which("node")
+    if not node:
+        return
+    root = Path(__file__).resolve().parent.parent
+    script = ("require(process.argv[1]);const M=require(process.argv[2]);const c=JSON.parse(process.argv[3]);"
+              "const r=M.noPlace({no_place:['removed']});"
+              "process.stdout.write(JSON.stringify(c.map(([i,ch,a])=>M.placeFor(i,ch,r,a))));")
+    out = subprocess.run([node, "-e", script, str(root / "site" / "titlecase.js"), str(root / "site" / "meta.js"),
+                          json.dumps(PLACE_CASES)], capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == py
+
+
+def test_model_remove_location_turns_off_auto_place():
+    script = """
+    const p = {id:'a', auto_place:{level:'city', gid:1, city:'Fira', country:'Greece', cc:'GR'}};
+    let d = M.normalize({}, cleanTitle);
+    const before = [M.placeOf(d, p).city, M.isAutoPlace(d, p)];
+    const removed = M.applyChange(d, {id:'a', place:null}, cleanTitle);
+    const chosen = M.applyChange(removed, {id:'a', place:{level:'country', country:'Italy', cc:'IT'}}, cleanTitle);
+    process.stdout.write(JSON.stringify([before, M.placeOf(removed, p), removed.no_place, M.placeOf(chosen, p).country,
+      M.isAutoPlace(chosen, p), chosen.no_place, JSON.parse(M.serialize(removed)).no_place, M.describe(d, removed, 'a')]));
+    """
+    before, rem, rem_list, chosen, chosen_auto, chosen_list, ser, msg = _node_model(script)
+    assert msg == "Photo a: location removed"
+    assert before == ["Fira", True] and rem is None and rem_list == ["a"] and ser == ["a"]
+    assert chosen == "Italy" and chosen_auto is False and chosen_list == []

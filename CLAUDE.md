@@ -47,7 +47,7 @@ to Pages when R2 isn't configured. Photos are **never committed**.
   (site repo only, Actions: read and write) powers the app's *Publish now*
   (workflow_dispatch); keys can't have per-repo permissions, so never merge
   the two. Saves write `curation.json`
-  (`{titles, order, collections, highlights, tags, photo_tags, locations, on_work, off_work}`) there via the GitHub API; the page reads it live from
+  (`{titles, order, collections, highlights, tags, photo_tags, locations, on_work, off_work, no_place}`) there via the GitHub API; the page reads it live from
   raw.githubusercontent.com and the build bakes it in (CI checks it out into
   `data/`). Treat it as untrusted input (validate, render as text only). Unplaced (new) photos sort first. Titles are optional: untitled photos show the date. Apple
   captions/comments are not reachable through the public album link (tested).
@@ -69,7 +69,14 @@ to Pages when R2 isn't configured. Photos are **never committed**.
 - **Locations are city / state-region / country only** (owner's rule). Never
   store or publish coordinates or anything finer; picks come from the
   built-in GeoNames list so names stay standard. The `located` flag (photo
-  file has GPS) is yes/no only.
+  file has GPS) is yes/no only. **Automatic place (owner chose "apply
+  automatically", 2026-11-27):** for a photo with GPS the build reads the
+  coordinates *in memory only*, picks the nearest town/island
+  (`nearest_place()`, size-weighted, ≤60 km, positions in the build-only
+  `scripts/place_coords.json`) and keeps just that place (`auto_place`).
+  Never write, log or publish the photo's coordinates. The editor's choice
+  wins; Remove adds the id to `no_place` (no automatic place either). Rule:
+  `placeFor()` in meta.js = `place_for()` in build.py.
 - **Instagram (@towbinaj)** is linked, not embedded. A live feed needs a
   Meta token that expires every 60 days, which was rejected.
 - Design: dark, editorial, modern. Not a template look.

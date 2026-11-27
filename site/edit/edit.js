@@ -99,7 +99,8 @@
   const longDate = (iso) => fmtDate(iso, { day: "numeric", month: "short", year: "numeric" });
   const thumb = (p, cssW) => {
     const need = cssW * Math.min(window.devicePixelRatio || 1, 3);
-    return "../" + (p.src.find((s) => s.w >= need) || p.src[p.src.length - 1]).url;
+    const u = (p.src.find((s) => s.w >= need) || p.src[p.src.length - 1]).url;
+    return /^https:\/\//.test(u) ? u : "../" + u; // image host (R2) or the site
   };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const ordered = () => M.orderPhotos(all, doc.order);

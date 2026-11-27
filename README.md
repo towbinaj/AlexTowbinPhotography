@@ -22,8 +22,9 @@ site → Run workflow*).
    - **resized** to several WebP sizes (480 → 3200 px) so each screen gets a
      sharp image without downloading more than it needs,
    - **re-encoded**, which strips **all metadata, including GPS location**.
-4. The static site in `site/` plus the processed images are deployed to Pages.
-   Photos are never committed to the repo.
+4. The static site in `site/` is deployed to Pages; the processed images go
+   to the **image host** (Cloudflare R2, `img.alextowbin.com`), or to Pages
+   too if R2 isn't set up. Photos are never committed to the repo.
 
 If iCloud is unreachable or returns an empty album, the build fails and the
 site keeps showing the last good version (the same if the `ICLOUD_ALBUM`
@@ -310,6 +311,24 @@ need to file a takedown.
 on the owner's GitHub account (TXT record), so no one else can claim it or
 its subdomains. The build gets the address from GitHub Pages (`SITE_URL`), so
 nothing in the code names the domain.
+
+## Image host (Cloudflare R2)
+GitHub Pages sites are limited to about 1 GB, which ~450 photos fill (each
+photo has six sizes). So the images are served from a Cloudflare R2 bucket
+(`alextowbin-photos`, public at **https://img.alextowbin.com**; free up to
+10 GB). Set up once:
+1. Cloudflare → **R2** → create the bucket; bucket **Settings → Custom
+   Domains** → connect `img.alextowbin.com`.
+2. R2 → **Manage API tokens** → create a token with **Object Read & Write**
+   on that bucket only, TTL forever.
+3. GitHub → repo **Settings → Secrets and variables → Actions**: add
+   `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+
+`image_url` in `config.json` is the public address. Each build uploads only
+new or changed images, deletes the images of photos no longer in the album
+(never more than half at once, as a safety check) and puts a `robots.txt` on
+the image host that turns away all AI crawlers. Without the secrets the
+images stay on Pages as before.
 
 ## Visitor counts (optional)
 With a free [GoatCounter](https://www.goatcounter.com/) account, the site

@@ -801,3 +801,81 @@ def test_sitemap_lists_pages_and_share_pages():
                     "https://photo.example.org/p/abc123/", "https://photo.example.org/p/nodate/"]
     assert "<lastmod>2026-11-20</lastmod>" in xml and xml.count("<lastmod>") == 1
     assert xml.startswith('<?xml version="1.0"') and 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' in xml
+
+
+# ---- image host: Cloudflare R2 ----
+
+def test_r2_settings_need_url_and_every_secret():
+    env = {"R2_ACCOUNT_ID": "acct", "R2_ACCESS_KEY_ID": "id", "R2_SECRET_ACCESS_KEY": "secret", "R2_BUCKET": "photos"}
+    cfg = {"image_url": "https://img.example.org/"}
+    s = build.r2_settings(cfg, env)
+    assert s == {"url": "https://img.example.org", "account": "acct", "key_id": "id", "secret": "secret", "bucket": "photos"}
+    assert build.r2_settings({}, env) is None
+    assert build.r2_settings({"image_url": "http://img.example.org"}, env) is None      # https only
+    assert build.r2_settings(cfg, {**env, "R2_BUCKET": ""}) is None                       # a secret missing
+    assert build.img_url("img/a-480.webp", "https://img.example.org", "../../") == "https://img.example.org/img/a-480.webp"
+    assert build.img_url("img/a-480.webp", "", "../../") == "../../img/a-480.webp"
+    assert build.img_origin("https://img.example.org") == "https://img.example.org"
+
+
+class FakeBucket:
+    def __init__(self, objects):
+        self.objects = dict(objects)  # key -> size
+        self.puts, self.deleted = [], []
+
+    def get_paginator(self, _name):
+        bucket = self
+
+        class P:
+            def paginate(self, Bucket, Prefix):
+                yield {"Contents": [{"Key": k, "Size": v} for k, v in bucket.objects.items() if k.startswith(Prefix)]}
+        return P()
+
+    def put_object(self, Bucket, Key, Body, ContentType, CacheControl):
+        self.puts.append((Key, ContentType, CacheControl))
+        self.objects[Key] = len(Body)
+
+    def delete_objects(self, Bucket, Delete):
+        for o in Delete["Objects"]:
+            self.deleted.append(o["Key"])
+            self.objects.pop(o["Key"], None)
+
+
+def test_sync_images_uploads_changes_and_deletes_removed(tmp_path):
+    img = tmp_path / "img"
+    img.mkdir()
+    (img / "a-480.webp").write_bytes(b"x" * 10)   # unchanged
+    (img / "b-480.webp").write_bytes(b"y" * 20)   # changed size
+    (img / "c-og.jpg").write_bytes(b"z" * 5)      # new
+    (img / "notes.txt").write_text("ignored")
+    fake = FakeBucket({"img/a-480.webp": 10, "img/b-480.webp": 19, "img/gone-480.webp": 7, "other/keep": 1})
+    stats = build.sync_images(fake, "photos", img)
+    assert stats == {"uploaded": 2, "deleted": 1, "kept": 1}
+    assert [p[0] for p in fake.puts] == ["img/b-480.webp", "img/c-og.jpg", "robots.txt"]
+    assert fake.puts[1][1] == "image/jpeg" and fake.puts[0][1] == "image/webp"
+    assert fake.deleted == ["img/gone-480.webp"] and "other/keep" in fake.objects
+
+
+def test_sync_images_refuses_mass_delete(tmp_path):
+    img = tmp_path / "img"
+    img.mkdir()
+    (img / "a-480.webp").write_bytes(b"x")
+    fake = FakeBucket({f"img/p{i}-480.webp": 3 for i in range(10)})
+    stats = build.sync_images(fake, "photos", img)
+    assert stats["deleted"] == 0 and fake.deleted == [] and len(fake.objects) == 12  # 10 + a + robots
+
+
+def test_build_points_pages_at_the_image_host(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "OUT", tmp_path / "_site")
+    monkeypatch.setattr(build, "CURATION", tmp_path / "none.json")
+    monkeypatch.setenv("SITE_URL", "https://photo.example.org")
+    build.build(build.demo_photos(2), {"name": "Test"}, use_cache=False, img_base="https://img.example.org")
+    out = tmp_path / "_site"
+    photos = json.loads((out / "photos.json").read_text())
+    assert all(s["url"].startswith("https://img.example.org/img/") for p in photos for s in p["src"])
+    home = (out / "index.html").read_text()
+    assert "img-src 'self' data: https://img.example.org" in home
+    assert '"contentUrl": "https://img.example.org/img/' in home or 'https://img.example.org/img/' in home
+    share = next(out.glob("p/*/index.html")).read_text()
+    assert 'src="https://img.example.org/img/' in share and "https://img.example.org/img/" in share.split("og:image")[1][:200]
+    assert "img-src 'self' data: https://img.example.org" in (out / "edit" / "index.html").read_text()

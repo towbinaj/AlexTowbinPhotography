@@ -176,6 +176,14 @@ the gallery (hidden until a collection exists), `#collection-<slug>` deep
 links, heading becomes the collection name, lightbox steps within it. Built
 from live data, baked fallback in `config.json` `collections`
 (`load_collections()`). `#edit` forces *All* (positions are global).
+**Image host: Cloudflare R2 (2026-11-27):** the Pages site hit 1.45 GB at 633
+photos (limit ~1 GB). Images now go to R2 bucket `alextowbin-photos` at
+`https://img.alextowbin.com` (`r2_settings()`/`sync_images()` in build.py,
+boto3; only new/changed uploads, deletes removed photos but never >50% at
+once, robots.txt on the image host blocks all AI bots). CSP `img-src` gets the
+host added at build. Needs the owner's 4 `R2_*` repo secrets; without them
+images stay on Pages.
+
 **Site-first (2026-11-26):** owner now publishes on the site before Instagram.
 `DRAFTS_UNTIL` in meta.js = build.py: photos added after it are shown at
 once (they still need *On Work page* for the Work list); earlier drafts stay

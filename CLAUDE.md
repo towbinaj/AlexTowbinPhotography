@@ -11,7 +11,10 @@ https://towbinaj.github.io/AlexTowbinPhotography/, which now redirects)
 A GitHub Action (`.github/workflows/deploy.yml`) runs hourly (:17), on every push to
 `main`, and on demand. It runs `scripts/build.py`, which pulls photos from the
 owner's iCloud shared album, processes them, and builds a static site into
-`_site/`, which is deployed to Pages. Photos are **never committed**.
+`_site/`, which is deployed to Pages. The processed images are uploaded to a
+Cloudflare R2 bucket served at `img.alextowbin.com` (config `image_url` +
+`R2_*` secrets; Pages' ~1 GB limit was exceeded at 633 photos), falling back
+to Pages when R2 isn't configured. Photos are **never committed**.
 
 ## Privacy & secrets — non-negotiable
 - **Never commit the album link/token.** It lives only in the repo secret

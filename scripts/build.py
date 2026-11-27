@@ -485,7 +485,13 @@ def sort_photos(photos: list[Photo], mode: str) -> list[Photo]:
     return sorted(photos, key=key, reverse=reverse)
 
 
-def json_ld(entries: list[dict], config: dict, r: dict, site_url: str) -> str:
+def img_url(rel: str, img_base: str, fallback: str) -> str:
+    """Where a processed image is served: from the image host (Cloudflare R2,
+    e.g. https://img.alextowbin.com) when one is set up, else from the site."""
+    return f"{img_base.rstrip('/')}/{rel}" if img_base else fallback + rel
+
+
+def json_ld(entries: list[dict], config: dict, r: dict, site_url: str, img_base: str = "") -> str:
     """schema.org structured data: who made the photos and who holds the copyright.
 
     Search engines (e.g. Google Images) read creator/copyrightNotice/creditText
@@ -497,8 +503,8 @@ def json_ld(entries: list[dict], config: dict, r: dict, site_url: str) -> str:
         person["sameAs"] = [f"https://www.instagram.com/{config['instagram'].lstrip('@')}/"]
     images = [{
         "@type": "ImageObject",
-        "contentUrl": base + e["src"][-1]["url"],
-        "thumbnailUrl": base + e["src"][0]["url"],
+        "contentUrl": img_url(e["src"][-1]["url"], img_base, base),
+        "thumbnailUrl": img_url(e["src"][0]["url"], img_base, base),
         "width": e["w"], "height": e["h"],
         **({"caption": e["caption"]} if e["caption"] else {}),
         **({"keywords": ", ".join(e["tags"])} if e.get("tags") else {}),
@@ -917,7 +923,8 @@ def sitemap_xml(site_url: str, entries: list[dict]) -> str:
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{rows}</urlset>\n'
 
 
-def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_size: tuple[int, int]) -> str:
+def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_size: tuple[int, int],
+               img_base: str = "") -> str:
     """HTML for p/<id>/: the photo, its title, place and date, and link-preview
     tags pointing at its own image. Everything from curation is escaped."""
     pid = e["id"]
@@ -938,10 +945,11 @@ def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_
         "COUNTER_PIXEL": pixel,
         "PAGE_TITLE": page_title, "DESCRIPTION": " · ".join(x for x in (subline, r["notice"]) if x),
         "AUTHOR": r["holder"], "COPYRIGHT": r["notice"], "SITE_NAME": site_name, "SITE_NAME_SHORT": name,
-        "PAGE_URL": page_url, "OG_IMAGE": f"{base}img/{pid}-og.jpg", "OG_W": str(og_size[0]), "OG_H": str(og_size[1]),
+        "PAGE_URL": page_url, "OG_IMAGE": img_url(f"img/{pid}-og.jpg", img_base, base), "OG_W": str(og_size[0]), "OG_H": str(og_size[1]),
         "ALT": title or f"Photograph by {r['holder']}", "HEADING": title or (when or "Untitled"),
         "SUBLINE": subline if title else place, "GALLERY_URL": f"../../work/#photo-{pid}",
-        "IMG_SRC": "../../" + mid["url"], "IMG_SRCSET": ", ".join(f"../../{x['url']} {x['w']}w" for x in srcs),
+        "IMG_SRC": img_url(mid["url"], img_base, "../../"),
+        "IMG_SRCSET": ", ".join(f"{img_url(x['url'], img_base, '../../')} {x['w']}w" for x in srcs),
         "W": str(e["w"]), "H": str(e["h"]),
     }
     out = template
@@ -1020,7 +1028,9 @@ def render_cached(photo: Photo, key: str, trim: bool, meta, out: Path, cache: Pa
 PAGES = [("home", "", "Home"), ("work", "work", "Work"), ("collections", "collections", "Collections"), ("about", "about", "About")]
 
 
-def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
+def build(photos: list[Photo], config: dict, use_cache: bool = True, img_base: str = "") -> None:
+    """Build the site into OUT. With `img_base` (the R2 image host), pages and
+    photos.json point there; the caller uploads OUT/img to it and removes it."""
     if OUT.exists():
         shutil.rmtree(OUT)
     shutil.copytree(SITE_SRC, OUT)
@@ -1076,7 +1086,8 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
     for e in entries:
         if e["id"] in og_sizes and not e.get("draft"):
             e["page"] = True  # has a share page at p/<id>/
-    (OUT / "photos.json").write_text(json.dumps(entries, separators=(",", ":")))
+    listed = [{**e, "src": [{**s, "url": img_url(s["url"], img_base, "")} for s in e["src"]]} for e in entries]
+    (OUT / "photos.json").write_text(json.dumps(listed, separators=(",", ":")))
     now = datetime.now(timezone.utc)
     site_repo = os.environ.get("GITHUB_REPOSITORY", "")
     cfg = dict(config, built=now.strftime("%Y-%m-%d"), built_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"), rights=r,
@@ -1092,7 +1103,7 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
     desc = html.escape(config.get("tagline") or config.get("title", ""))
     # One template, four pages: home (/), work/, collections/, about/.
     template_page = (OUT / "index.html").read_text()
-    ld = json_ld(shown, config, r, site_url)
+    ld = json_ld(shown, config, r, site_url, img_base)
     for page, folder, label in PAGES:
         root = "../" if folder else ""
         page_title = title if page == "home" else f"{label} — {title}"
@@ -1103,7 +1114,7 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
                 .replace("{{AUTHOR}}", html.escape(r["holder"]))
                 .replace("{{COPYRIGHT}}", html.escape(r["notice"]))
                 .replace("{{JSONLD}}", ld if page in ("home", "work") else "{}")
-                .replace("{{OG_IMAGE}}", f"{site_url}/img/og.jpg" if og_written else ""))
+                .replace("{{OG_IMAGE}}", img_url("img/og.jpg", img_base, f"{site_url}/") if og_written else ""))
         target = OUT / folder / "index.html" if folder else OUT / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)
@@ -1114,7 +1125,7 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
         if e.get("page"):
             d = OUT / "p" / e["id"]
             d.mkdir(parents=True, exist_ok=True)
-            (d / "index.html").write_text(photo_page(template, e, config, r, site_url, og_sizes[e["id"]]))
+            (d / "index.html").write_text(photo_page(template, e, config, r, site_url, og_sizes[e["id"]], img_base))
 
     # Version-stamp local scripts/styles everywhere; the editor app compares
     # its version with version.json to pick up a new build without waiting.
@@ -1124,6 +1135,8 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
         text = stamp_assets(page.read_text(), version)
         if page.parent.name == "edit":
             text = text.replace("</head>", f'  <meta name="app-version" content="{version}">\n</head>', 1)
+        if img_base:  # let the pages load images from the image host
+            text = text.replace("img-src 'self' data:", f"img-src 'self' data: {img_origin(img_base)}", 1)
         page.write_text(text)
     (OUT / "version.json").write_text(json.dumps({"v": version}))
     # Sitemap (needs the site's address, which CI provides), linked from robots.txt.
@@ -1133,6 +1146,99 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True) -> None:
         robots.write_text(robots.read_text().rstrip("\n") + f"\n\nSitemap: {site_url}/sitemap.xml\n")
     (OUT / ".nojekyll").write_text("")
     print(f"Built {len(entries)} photos ({len(og_sizes)} share pages) into {OUT}")
+
+
+# ---- image host: Cloudflare R2 ----
+# GitHub Pages sites are limited to about 1 GB, so the processed images can be
+# served from an R2 bucket instead (config "image_url", e.g.
+# https://img.alextowbin.com, plus the R2_* secrets in CI). Each build uploads
+# only new or changed files and deletes files of photos no longer in the album.
+R2_ENV = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")
+IMAGE_CACHE_CONTROL = "public, max-age=604800"
+IMAGE_TYPES = {".webp": "image/webp", ".jpg": "image/jpeg"}
+# The image host gets its own robots.txt: no AI crawler of any kind, search engines welcome.
+IMAGE_ROBOTS = """# The photographs here are copyrighted. They may not be collected, copied,
+# or used to train AI models.
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: OAI-SearchBot
+User-agent: CCBot
+User-agent: ClaudeBot
+User-agent: Claude-User
+User-agent: Claude-SearchBot
+User-agent: anthropic-ai
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Bytespider
+User-agent: Meta-ExternalAgent
+User-agent: Meta-ExternalFetcher
+User-agent: Amazonbot
+User-agent: cohere-ai
+User-agent: cohere-training-data-crawler
+User-agent: Diffbot
+User-agent: ImagesiftBot
+User-agent: Omgilibot
+User-agent: Timpibot
+User-agent: DuckAssistBot
+User-agent: MistralAI-User
+Disallow: /
+
+User-agent: *
+Allow: /
+"""
+
+
+def img_origin(img_base: str) -> str:
+    u = urllib.parse.urlsplit(img_base)
+    return f"{u.scheme}://{u.netloc}"
+
+
+def r2_settings(config: dict, env=os.environ) -> dict | None:
+    """R2 upload settings when both the image URL (config) and every R2 secret
+    (environment) are present; otherwise None and images stay on Pages."""
+    url = str(config.get("image_url") or "").strip().rstrip("/")
+    vals = {k: (env.get(k) or "").strip() for k in R2_ENV}
+    if not re.fullmatch(r"https://[a-z0-9.-]+", url) or not all(vals.values()):
+        return None
+    return {"url": url, "account": vals["R2_ACCOUNT_ID"], "key_id": vals["R2_ACCESS_KEY_ID"],
+            "secret": vals["R2_SECRET_ACCESS_KEY"], "bucket": vals["R2_BUCKET"]}
+
+
+def r2_client(s: dict):
+    import boto3  # only needed in CI when R2 is set up
+    return boto3.client("s3", endpoint_url=f"https://{s['account']}.r2.cloudflarestorage.com",
+                        aws_access_key_id=s["key_id"], aws_secret_access_key=s["secret"], region_name="auto")
+
+
+def sync_images(client, bucket: str, folder: Path, prefix: str = "img/") -> dict:
+    """Make the bucket's `prefix` match `folder`: upload files that are missing
+    or differ in size, delete ones that are gone. Deletes nothing if more than
+    half of the bucket's images would go (a sign something went wrong)."""
+    remote: dict[str, int] = {}
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        for o in page.get("Contents", []):
+            remote[o["Key"]] = o["Size"]
+    local = {prefix + f.name: f for f in folder.iterdir() if f.is_file() and f.suffix in IMAGE_TYPES}
+    uploaded = 0
+    for k, f in sorted(local.items()):
+        if remote.get(k) != f.stat().st_size:
+            client.put_object(Bucket=bucket, Key=k, Body=f.read_bytes(), ContentType=IMAGE_TYPES[f.suffix],
+                              CacheControl=IMAGE_CACHE_CONTROL)
+            uploaded += 1
+    gone = sorted(set(remote) - set(local))
+    deleted = 0
+    if gone and len(gone) > len(remote) / 2:
+        print(f"  not deleting {len(gone)} of {len(remote)} images from the bucket (too many; check the album)",
+              file=sys.stderr)
+    else:
+        for i in range(0, len(gone), 1000):
+            client.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in gone[i:i + 1000]]})
+        deleted = len(gone)
+    client.put_object(Bucket=bucket, Key="robots.txt", Body=IMAGE_ROBOTS.encode(), ContentType="text/plain",
+                      CacheControl="public, max-age=3600")
+    return {"uploaded": uploaded, "deleted": deleted, "kept": len(local) - uploaded}
 
 
 def main() -> int:
@@ -1162,7 +1268,13 @@ def main() -> int:
         photos = local_photos()
         print(f"No ICLOUD_ALBUM set; using {len(photos)} photos from photos/")
 
-    build(photos, config, use_cache=not args.demo)  # demo images are throwaway: don't cache them
+    r2 = None if args.demo else r2_settings(config)
+    build(photos, config, use_cache=not args.demo, img_base=r2["url"] if r2 else "")  # demo images aren't cached
+    if r2:
+        # Images go to R2; the Pages site keeps only the pages.
+        stats = sync_images(r2_client(r2), r2["bucket"], OUT / "img")
+        shutil.rmtree(OUT / "img")
+        print(f"Images on {r2['url']}: {stats['uploaded']} uploaded, {stats['deleted']} deleted, {stats['kept']} unchanged")
     return 0
 
 

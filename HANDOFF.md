@@ -180,6 +180,12 @@ the gallery (hidden until a collection exists), `#collection-<slug>` deep
 links, heading becomes the collection name, lightbox steps within it. Built
 from live data, baked fallback in `config.json` `collections`
 (`load_collections()`). `#edit` forces *All* (positions are global).
+**Faster big batches (2026-11-27):** new originals download 8 at a time
+(`fetch_original`), new photos are processed on all CPUs (`prerender()`,
+ProcessPool; output identical to one-at-a-time, 3.7× faster on 4 cores) and
+R2 uploads run 16 at a time. The ~630-photo batch took ~25 min processing +
+~15 min upload before this.
+
 **Image host: Cloudflare R2 (2026-11-27):** the Pages site hit 1.45 GB at 633
 photos (limit ~1 GB). Images now go to R2 bucket `alextowbin-photos` at
 `https://img.alextowbin.com` (`r2_settings()`/`sync_images()` in build.py,

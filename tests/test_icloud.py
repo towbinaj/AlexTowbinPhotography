@@ -851,8 +851,9 @@ def test_sync_images_uploads_changes_and_deletes_removed(tmp_path):
     fake = FakeBucket({"img/a-480.webp": 10, "img/b-480.webp": 19, "img/gone-480.webp": 7, "other/keep": 1})
     stats = build.sync_images(fake, "photos", img)
     assert stats == {"uploaded": 2, "deleted": 1, "kept": 1}
-    assert [p[0] for p in fake.puts] == ["img/b-480.webp", "img/c-og.jpg", "robots.txt"]
-    assert fake.puts[1][1] == "image/jpeg" and fake.puts[0][1] == "image/webp"
+    puts = {p[0]: p[1] for p in fake.puts}  # uploads run in parallel: order varies
+    assert sorted(puts) == ["img/b-480.webp", "img/c-og.jpg", "robots.txt"] and fake.puts[-1][0] == "robots.txt"
+    assert puts["img/c-og.jpg"] == "image/jpeg" and puts["img/b-480.webp"] == "image/webp"
     assert fake.deleted == ["img/gone-480.webp"] and "other/keep" in fake.objects
 
 
@@ -893,3 +894,48 @@ def test_image_host_ready_checks_the_public_address():
     def boom(u, timeout):
         raise OSError("no such host")
     assert not build.image_host_ready(fake, "photos", "https://img.example.org", get=boom)
+
+
+# ---- faster big batches: parallel download / processing ----
+
+def test_prerender_in_parallel_matches_one_at_a_time(tmp_path):
+    import hashlib
+    photos = []
+    for i in range(3):
+        f = tmp_path / f"o{i}.jpg"
+        framed(600 + i * 40, 400, 12).save(f)
+        photos.append(build.Photo(id=f"par{i}", source=f, added="2026-05-01T00:00:00Z"))
+    photos.append(build.Photo(id="nofile", source=None))             # cached-only photo: skipped
+    cfg = {"name": "Test"}
+    key, meta = build.render_key(cfg), build.rights_metadata(build.rights(cfg))
+
+    def digest(d):
+        h = hashlib.sha256()
+        for p in sorted(d.rglob("*")):
+            if p.is_file():
+                h.update(p.relative_to(d).as_posix().encode() + p.read_bytes())
+        return h.hexdigest()
+    for p in photos:
+        build.render_to_cache(p, key, False, meta, tmp_path / "serial")
+    assert build.prerender(photos, key, False, meta, tmp_path / "par", workers=2) == 3
+    assert digest(tmp_path / "serial") == digest(tmp_path / "par")
+    assert build.prerender(photos, key, False, meta, tmp_path / "par", workers=2) == 0  # all cached now
+
+
+def test_download_album_fetches_in_parallel_keeps_order_and_drops_failures(tmp_path, monkeypatch):
+    items = [{"checksum": f"c{i}", "url": f"https://example.org/{i}", "caption": "", "taken": "", "added": ""}
+             for i in range(6)]
+    monkeypatch.setattr(build, "CACHE", tmp_path)
+    monkeypatch.setattr(build, "fetch_cloudkit_album", lambda token: ("Album", items))
+
+    def fake_fetch(url, dest):
+        if url.endswith("/3"):
+            return False                                   # one download fails
+        dest.write_bytes(b"x")
+        return True
+    monkeypatch.setattr(build, "fetch_original", fake_fetch)
+    skip_id = build.hashlib.sha1(b"c1").hexdigest()[:12]
+    photos = build.download_album("1TOKEN", skip=lambda pid: pid == skip_id)
+    ids = [build.hashlib.sha1(f"c{i}".encode()).hexdigest()[:12] for i in (0, 1, 2, 4, 5)]
+    assert [p.id for p in photos] == ids                    # album order, failed one dropped
+    assert photos[1].source is None and all(p.source for i, p in enumerate(photos) if i != 1)

@@ -330,7 +330,7 @@ photo has six sizes). So the images are served from a Cloudflare R2 bucket
    `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
 
 `image_url` in `config.json` is the public address. Each build uploads only
-new or changed images, deletes the images of photos no longer in the album
+new or changed images (16 at a time), deletes the images of photos no longer in the album
 (never more than half at once, as a safety check) and puts a `robots.txt` on
 the image host that turns away all AI crawlers. Before switching, each build
 checks that `image_url` actually serves the bucket; if not (domain not

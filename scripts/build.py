@@ -29,8 +29,10 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 import urllib.parse
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -277,6 +279,33 @@ def fetch_sharedstream_album(token: str, session: requests.Session | None = None
 # Download (with cache) + other sources
 # --------------------------------------------------------------------------
 
+DOWNLOAD_WORKERS = 8
+_local = threading.local()
+
+
+def fetch_original(url: str, dest: Path) -> bool:
+    """Download one original to dest (3 tries). One HTTP session per thread."""
+    session = getattr(_local, "session", None)
+    if session is None:
+        session = _local.session = requests.Session()
+        session.headers["User-Agent"] = UA
+    for attempt in range(3):
+        try:
+            with session.get(url, timeout=180, stream=True) as r:
+                r.raise_for_status()
+                tmp = dest.with_suffix(".part")
+                with open(tmp, "wb") as f:
+                    for chunk in r.iter_content(1 << 20):
+                        f.write(chunk)
+                tmp.replace(dest)
+            return True
+        except requests.RequestException as e:
+            if attempt == 2:
+                print(f"  could not download a photo: {e}", file=sys.stderr)
+            time.sleep(2 ** attempt)
+    return dest.exists()
+
+
 def download_album(token: str, skip=None) -> list[Photo]:
     """skip(pid) -> True when the photo's processed images are already cached,
     so its (large) original doesn't need downloading."""
@@ -293,33 +322,24 @@ def download_album(token: str, skip=None) -> list[Photo]:
     print(f"iCloud album {name!r}: {len(items)} photos")
 
     CACHE.mkdir(parents=True, exist_ok=True)
-    session = requests.Session()
-    session.headers["User-Agent"] = UA
-    photos = []
+    photos: list[Photo | None] = []
+    jobs = []  # (index in photos, url, dest) for originals still to fetch
     for it in items:
         pid = hashlib.sha1(it["checksum"].encode()).hexdigest()[:12]
         dest = CACHE / f"{pid}.img"
-        if skip and skip(pid) and not dest.exists():
-            photos.append(Photo(id=pid, source=None, caption=it["caption"], taken=it["taken"], added=it["added"]))
-            continue
-        if not dest.exists():
-            for attempt in range(3):
-                try:
-                    with session.get(it["url"], timeout=180, stream=True) as r:
-                        r.raise_for_status()
-                        tmp = dest.with_suffix(".part")
-                        with open(tmp, "wb") as f:
-                            for chunk in r.iter_content(1 << 20):
-                                f.write(chunk)
-                        tmp.replace(dest)
-                    break
-                except requests.RequestException as e:
-                    if attempt == 2:
-                        print(f"  could not download a photo: {e}", file=sys.stderr)
-                    time.sleep(2 ** attempt)
-            if not dest.exists():
-                continue
-        photos.append(Photo(id=pid, source=dest, caption=it["caption"], taken=it["taken"], added=it["added"]))
+        cached = skip and skip(pid) and not dest.exists()
+        photos.append(Photo(id=pid, source=None if cached else dest, caption=it["caption"], taken=it["taken"],
+                            added=it["added"]))
+        if not cached and not dest.exists():
+            jobs.append((len(photos) - 1, it["url"], dest))
+    # Fetch new originals several at a time (big batches of new photos).
+    if jobs:
+        print(f"  downloading {len(jobs)} new photos")
+        with ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as pool:
+            for (i, _url, _dest), ok in zip(jobs, pool.map(lambda j: fetch_original(j[1], j[2]), jobs)):
+                if not ok:
+                    photos[i] = None
+    photos = [p for p in photos if p is not None]
 
     keep = {p.source.name for p in photos if p.source}
     for f in CACHE.glob("*.img"):
@@ -995,25 +1015,9 @@ def cached_entry(pid: str, key: str, cache: Path = RENDER_CACHE) -> dict | None:
 def render_cached(photo: Photo, key: str, trim: bool, meta, out: Path, cache: Path = RENDER_CACHE) -> dict | None:
     """Photo entry for photos.json, with its images copied into out/img/. Uses
     the cache when possible; otherwise processes the original and caches it."""
-    data = cached_entry(photo.id, key, cache)
+    data = cached_entry(photo.id, key, cache) or render_to_cache(photo, key, trim, meta, cache)
     if data is None:
-        if photo.source is None or not _SAFE_ID.fullmatch(photo.id):
-            return None
-        d = cache / photo.id
-        shutil.rmtree(d, ignore_errors=True)
-        (d / "img").mkdir(parents=True)
-        e = render_images(photo, d, trim=trim, meta=meta)
-        if not e:
-            shutil.rmtree(d, ignore_errors=True)
-            return None
-        im = e.pop("_im")
-        og = im.copy()
-        og.thumbnail((OG_EDGE, OG_EDGE))
-        og.save(d / "img" / f"{photo.id}-og.jpg", "JPEG", quality=82,
-                **({"exif": meta[0], "xmp": meta[1]} if meta else {}))
-        data = {"key": key, "w": e["w"], "h": e["h"], "lqip": e["lqip"], "src": e["src"],
-                "located": e["located"], "og": list(og.size)}
-        (d / "entry.json").write_text(json.dumps(data))
+        return None
     for f in (cache / photo.id / "img").iterdir():
         target = out / "img" / f.name
         try:
@@ -1023,6 +1027,51 @@ def render_cached(photo: Photo, key: str, trim: bool, meta, out: Path, cache: Pa
     return {"id": photo.id, "w": data["w"], "h": data["h"], "caption": photo.caption,
             "taken": photo.taken, "added": photo.added, "lqip": data["lqip"], "src": data["src"],
             "located": data["located"], "_og": tuple(data["og"])}
+
+
+def render_to_cache(photo: Photo, key: str, trim: bool, meta, cache: Path = RENDER_CACHE) -> dict | None:
+    """Process one original into cache/<id>/ (all sizes, link-preview JPEG,
+    entry.json). Returns the entry data, or None if it can't be processed."""
+    if photo.source is None or not _SAFE_ID.fullmatch(photo.id):
+        return None
+    d = cache / photo.id
+    shutil.rmtree(d, ignore_errors=True)
+    (d / "img").mkdir(parents=True)
+    e = render_images(photo, d, trim=trim, meta=meta)
+    if not e:
+        shutil.rmtree(d, ignore_errors=True)
+        return None
+    im = e.pop("_im")
+    og = im.copy()
+    og.thumbnail((OG_EDGE, OG_EDGE))
+    og.save(d / "img" / f"{photo.id}-og.jpg", "JPEG", quality=82,
+            **({"exif": meta[0], "xmp": meta[1]} if meta else {}))
+    data = {"key": key, "w": e["w"], "h": e["h"], "lqip": e["lqip"], "src": e["src"],
+            "located": e["located"], "og": list(og.size)}
+    (d / "entry.json").write_text(json.dumps(data))
+    return data
+
+
+def _render_job(args) -> bool:
+    photo, key, trim, meta, cache = args
+    try:
+        return render_to_cache(photo, key, trim, meta, cache) is not None
+    except Exception as err:  # noqa: BLE001 (one bad photo mustn't stop the rest)
+        print(f"  could not process {photo.id}: {err.__class__.__name__}", file=sys.stderr)
+        return False
+
+
+def prerender(photos: list[Photo], key: str, trim: bool, meta, cache: Path = RENDER_CACHE, workers: int | None = None) -> int:
+    """Process every photo not cached yet, on all CPUs at once. Big batches of
+    new photos were ~2.5 s each one at a time; this divides that by the core count."""
+    todo = [p for p in photos if p.source is not None and cached_entry(p.id, key, cache) is None]
+    workers = workers or os.cpu_count() or 1
+    if len(todo) < 2 or workers < 2:
+        return 0
+    print(f"  processing {len(todo)} new photos on {workers} cores")
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        done = sum(pool.map(_render_job, [(p, key, trim, meta, cache) for p in todo], chunksize=1))
+    return done
 
 
 PAGES = [("home", "", "Home"), ("work", "work", "Work"), ("collections", "collections", "Collections"), ("about", "about", "About")]
@@ -1049,6 +1098,7 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True, img_base: s
     trim = config.get("trim_white_borders", False)
     key = render_key(config)
     cache = RENDER_CACHE if use_cache else OUT.parent / ".cache" / f"rendered-tmp-{os.getpid()}"
+    prerender(photos, key, trim, meta, cache)
     for p in photos:
         e = render_cached(p, key, trim, meta, OUT, cache)
         if not e:
@@ -1155,6 +1205,7 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True, img_base: s
 # only new or changed files and deletes files of photos no longer in the album.
 R2_ENV = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")
 IMAGE_CACHE_CONTROL = "public, max-age=604800"
+UPLOAD_WORKERS = 16
 IMAGE_TYPES = {".webp": "image/webp", ".jpg": "image/jpeg"}
 # The image host gets its own robots.txt: no AI crawler of any kind, search engines welcome.
 IMAGE_ROBOTS = """# The photographs here are copyrighted. They may not be collected, copied,
@@ -1247,12 +1298,15 @@ def sync_images(client, bucket: str, folder: Path, prefix: str = "img/") -> dict
         for o in page.get("Contents", []):
             remote[o["Key"]] = o["Size"]
     local = {prefix + f.name: f for f in folder.iterdir() if f.is_file() and f.suffix in IMAGE_TYPES}
-    uploaded = 0
-    for k, f in sorted(local.items()):
-        if remote.get(k) != f.stat().st_size:
-            client.put_object(Bucket=bucket, Key=k, Body=f.read_bytes(), ContentType=IMAGE_TYPES[f.suffix],
-                              CacheControl=IMAGE_CACHE_CONTROL)
-            uploaded += 1
+    todo = [(k, f) for k, f in sorted(local.items()) if remote.get(k) != f.stat().st_size]
+
+    def put(kf):
+        k, f = kf
+        client.put_object(Bucket=bucket, Key=k, Body=f.read_bytes(), ContentType=IMAGE_TYPES[f.suffix],
+                          CacheControl=IMAGE_CACHE_CONTROL)
+    with ThreadPoolExecutor(max_workers=UPLOAD_WORKERS) as pool:
+        list(pool.map(put, todo))  # list(): raise the first upload error, if any
+    uploaded = len(todo)
     gone = sorted(set(remote) - set(local))
     deleted = 0
     if gone and len(gone) > len(remote) / 2:

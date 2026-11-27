@@ -143,7 +143,8 @@
     const noPlace = all.filter((p) => !doc.locations[p.id]).length;
     const hiddenN = all.filter((p) => !M.isShown(doc, p)).length;
     const offWork = all.filter((p) => !M.onWork(doc, p)).length;
-    const out = [["all", `All ${all.length}`], ["shown", `Shown ${all.length - hiddenN}`], ["hidden", `Hidden ${hiddenN}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["offwork", `Not on Work ${offWork}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
+    const onWorkN = all.filter((p) => M.isShown(doc, p) && M.onWork(doc, p)).length;
+    const out = [["all", `All ${all.length}`], ["shown", `Shown ${all.length - hiddenN}`], ["hidden", `Hidden ${hiddenN}`], ["untitled", `Untitled ${untitled}`], ["noplace", `No location ${noPlace}`], ["onwork", `On Work ${onWorkN}`], ["offwork", `Not on Work ${offWork}`], ["high", `★ ${doc.highlights.filter((id) => all.some((p) => p.id === id)).length}`], ["none", `No collection ${loose}`]];
     doc.collections.forEach((c, i) => out.push(["c" + i, `${c.name} ${c.photos.filter((id) => all.some((p) => p.id === id)).length}`]));
     return out;
   }
@@ -166,6 +167,8 @@
     if (f === "hidden") return list.filter((p) => !M.isShown(doc, p));
     if (f === "shown") return list.filter((p) => M.isShown(doc, p));
     if (f === "offwork") return list.filter((p) => !M.onWork(doc, p));
+    // What visitors see on the Work page: shown and checked, in Work order.
+    if (f === "onwork") return list.filter((p) => M.isShown(doc, p) && M.onWork(doc, p));
     if (f === "high") { const byId = new Map(list.map((p) => [p.id, p])); return doc.highlights.map((id) => byId.get(id)).filter(Boolean); }
     if (f === "none") return list.filter((p) => !M.collectionOf(doc, p.id));
     if (f[0] === "c") {

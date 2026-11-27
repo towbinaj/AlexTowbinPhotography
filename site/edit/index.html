@@ -91,7 +91,20 @@
       <button type="button" class="btn small" id="ro-save" disabled>Save</button>
     </header>
     <p class="mono hint pad" id="ro-hint"></p>
+    <div class="rtools pad">
+      <button type="button" class="btn ghost small" id="ro-oldest">Oldest first</button>
+      <button type="button" class="btn ghost small" id="ro-newest">Newest first</button>
+      <button type="button" class="btn ghost small" id="ro-compact" aria-pressed="false">Compact</button>
+    </div>
     <ol class="rgrid" id="ro-grid"></ol>
+    <div class="rsel mono" id="ro-sel" hidden>
+      <span id="ro-sel-count"></span>
+      <button type="button" class="btn ghost small" id="ro-to-start">To start</button>
+      <button type="button" class="btn ghost small" id="ro-to-end">To end</button>
+      <span class="rpos"><input id="ro-pos" type="number" inputmode="numeric" min="1" step="1" placeholder="No." aria-label="Move to number">
+        <button type="button" class="btn ghost small" id="ro-to-pos">Move</button></span>
+      <button type="button" class="icon-btn mono" id="ro-sel-clear">Clear</button>
+    </div>
   </section>
 
   <!-- Undo the last save (shown for a few seconds after each save) -->

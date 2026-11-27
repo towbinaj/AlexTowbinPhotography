@@ -217,6 +217,24 @@ p.err.ok { color: var(--good); }
 .rctl button:disabled { opacity: .3; }
 .rctl .handle { touch-action: none; cursor: grab; font-size: 18px; letter-spacing: 0; }
 .rtile.moved .num { color: var(--accent); }
+.rtile.sel .frame { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rtile.sel .num::before { content: "✓ "; color: var(--accent); }
+.rtile .frame { cursor: pointer; }
+.rtools { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
+.rtools [aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+/* Compact: many more tiles per screen; drag by ⠿, tap to select */
+.rgrid.compact { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px 8px; }
+.rgrid.compact .cap, .rgrid.compact .prev, .rgrid.compact .next { display: none; }
+.rgrid.compact .rctl button { width: 34px; height: 34px; }
+/* Bar for moving the selected photos */
+.rsel {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px var(--pad) calc(10px + env(safe-area-inset-bottom)); background: rgba(11, 11, 10, .94);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
+}
+.rsel .rpos { display: inline-flex; gap: 6px; align-items: center; }
+.rsel input { width: 68px; }
+#reorder:has(.rsel:not([hidden])) .rgrid { padding-bottom: 150px; }
 
 /* ---------- undo ---------- */
 .undo {

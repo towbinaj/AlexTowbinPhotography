@@ -173,7 +173,11 @@ background) and opens full screen.
   collection's filter selected it orders **that collection** (its first photo
   is the cover); with the **★** filter it orders the **highlights** (the Home
   page and its slideshow). Drag a photo by **⠿**, or nudge it with
-  **‹ ›**, then **Save** (one save for the whole order).
+  **‹ ›**, then **Save** (one save for the whole order). For long lists:
+  **Oldest first / Newest first** sorts by date taken as a starting point;
+  **tap photos** to select several, then move them together **To start**,
+  **To end** or to a **No.**; **Compact** shows smaller tiles, four or more
+  per row (remembered on the phone).
 - **Undo:** after every save (a photo, a bulk change, a tag edit, a new
   order) an **Undo** bar appears for 20 seconds. It puts back exactly what
   was there before, unless the data changed in the meantime (then it says so

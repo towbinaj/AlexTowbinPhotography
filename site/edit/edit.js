@@ -825,13 +825,16 @@
     $("ro-hint").textContent = (c ? `Order of this collection (${list.length}). `
       : high ? `Order of the ${list.length} highlights on the Home page and in its slideshow. `
       : `Order on the Work page: the ${list.length} photos on it. Hidden photos and ones not on Work keep their places. `)
-      + "Drag a photo by ⠿, or nudge it with ‹ ›. Then Save.";
+      + "Drag a photo by ⠿, or nudge it with ‹ ›. Tap photos to select several and move them together. Then Save.";
+    roSel.clear(); roSelUpdate();
     const grid = $("ro-grid"); grid.textContent = "";
     list.forEach((p, i) => {
       const li = el("li", "rtile"); li.dataset.id = p.id; li.dataset.start = String(i);
       const img = new Image(); img.loading = "lazy"; img.decoding = "async"; img.draggable = false; img.alt = doc.titles[p.id] || "";
       img.src = thumb(p, 180);
       const frame = el("span", "frame"); frame.appendChild(img);
+      frame.addEventListener("click", () => { if (roSel.has(li)) roSel.delete(li); else roSel.add(li); roSelUpdate(); });
+      li.dataset.taken = p.taken || ""; li.dataset.added = p.added || "";
       const ctl = el("div", "rctl");
       const prev = el("button", "prev", "‹"), next = el("button", "next", "›"), handle = el("button", "handle", "⠿");
       prev.type = next.type = handle.type = "button";
@@ -846,6 +849,51 @@
     roNumber();
     show("reorder"); scrollTo(0, 0);
   }
+  // Long lists: sort by date taken, select several and move them together,
+  // and a compact view with many more tiles per screen.
+  const roSel = new Set();
+  function roSelUpdate() {
+    for (const t of $("ro-grid").children) t.classList.toggle("sel", roSel.has(t));
+    $("ro-sel").hidden = !roSel.size;
+    $("ro-sel-count").textContent = `${roSel.size} selected`;
+    $("ro-pos").max = $("ro-grid").children.length;
+  }
+  // Put the selected tiles (in their current order) at 0-based index `at`
+  // among the others.
+  function roMoveSelected(at) {
+    const grid = $("ro-grid"), all = [...grid.children];
+    const picked = all.filter((t) => roSel.has(t)), rest = all.filter((t) => !roSel.has(t));
+    const i = Math.max(0, Math.min(at, rest.length));
+    grid.append(...rest.slice(0, i), ...picked, ...rest.slice(i));
+    roNumber();
+    picked[0] && picked[0].scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+  function roSort(newest) {
+    const grid = $("ro-grid");
+    const key = (t) => t.dataset.taken || t.dataset.added || "";
+    const tiles = [...grid.children].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0) * (newest ? -1 : 1));
+    grid.append(...tiles);
+    roNumber();
+  }
+  $("ro-oldest").addEventListener("click", () => roSort(false));
+  $("ro-newest").addEventListener("click", () => roSort(true));
+  $("ro-compact").addEventListener("click", () => {
+    const on = !$("ro-grid").classList.contains("compact");
+    $("ro-grid").classList.toggle("compact", on);
+    $("ro-compact").setAttribute("aria-pressed", String(on));
+    try { localStorage.setItem("at-ro-compact", on ? "1" : ""); } catch { /* ignore */ }
+  });
+  try { if (localStorage.getItem("at-ro-compact") === "1") { $("ro-grid").classList.add("compact"); $("ro-compact").setAttribute("aria-pressed", "true"); } } catch { /* ignore */ }
+  $("ro-to-start").addEventListener("click", () => roMoveSelected(0));
+  $("ro-to-end").addEventListener("click", () => roMoveSelected(Infinity));
+  $("ro-to-pos").addEventListener("click", () => {
+    const n = Math.round(Number($("ro-pos").value));
+    if (!Number.isFinite(n) || n < 1) { $("ro-pos").focus(); return; }
+    roMoveSelected(n - 1);
+    $("ro-pos").value = "";
+  });
+  $("ro-sel-clear").addEventListener("click", () => { roSel.clear(); roSelUpdate(); });
+
   // Drag: the tile jumps into place as the finger passes over other tiles;
   // the page scrolls when the finger nears the top or bottom.
   function roDrag(e, li) {

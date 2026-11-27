@@ -179,7 +179,8 @@ background) and opens full screen.
   **To end** or to a **No.**; **Compact** shows smaller tiles, four or more
   per row (remembered on the phone).
 - **Undo:** after every save (a photo, a bulk change, a tag edit, a new
-  order) an **Undo** bar appears for 20 seconds. It puts back exactly what
+  order) a small **Saved · Undo** pill shows at the bottom for 8 seconds
+  (any tap elsewhere dismisses it). Undo puts back exactly what
   was there before, unless the data changed in the meantime (then it says so
   and changes nothing). Older changes stay in the data repository's history.
 - **Several photos at once:** tap **Select**, tap the photos (or *Select

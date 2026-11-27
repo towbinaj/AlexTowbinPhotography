@@ -237,13 +237,18 @@ p.err.ok { color: var(--good); }
 #reorder:has(.rsel:not([hidden])) .rgrid { padding-bottom: 150px; }
 
 /* ---------- undo ---------- */
+/* A small pill near the bottom: "Saved · Undo". Goes away after a few
+   seconds, on any tap elsewhere, or on a screen change. */
 .undo {
-  position: fixed; left: var(--pad); right: var(--pad); bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 7;
-  display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 12px;
-  background: var(--bg-3); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.5);
-  text-transform: none; letter-spacing: .02em; max-width: 560px; margin: 0 auto;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 7;
+  display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 12px; border-radius: 999px;
+  max-width: calc(100% - 2 * var(--pad)); font-size: 11px; color: var(--muted);
+  background: rgba(30, 30, 28, .92); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.4);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); letter-spacing: .04em;
 }
-.undo #undo-msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body:has(.bulkbar:not([hidden])) .undo, body:has(.rsel:not([hidden])) .undo { bottom: calc(118px + env(safe-area-inset-bottom)); }
+.undo #undo-msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.undo #undo-btn { background: none; border: 0; color: var(--accent); padding: 6px 10px; min-height: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .undo.err { border-color: var(--bad); color: var(--bad); }
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

@@ -772,12 +772,18 @@
     $("undo-btn").hidden = !withButton;
     $("undo").classList.toggle("err", !!err);
     $("undo").hidden = false;
-    undoTimer = setTimeout(() => { $("undo").hidden = true; }, withButton ? 20000 : 6000);
+    undoTimer = setTimeout(() => { $("undo").hidden = true; }, err ? 8000 : withButton ? 8000 : 3000);
   }
   function offerUndo(message) {
-    const what = message.replace(/^Photo [\w-]+: /, "").replace(/^Tags: /, "");
-    undoBar(`Saved: ${what}`, true);
+    $("undo").title = message;  // the full change, for a long press / hover
+    undoBar("Saved ·", true);
   }
+  // Any tap outside the pill dismisses it (the change stays saved).
+  document.addEventListener("pointerdown", (e) => {
+    if (!$("undo").hidden && !$("undo").contains(e.target) && !$("undo").classList.contains("err")) {
+      clearTimeout(undoTimer); $("undo").hidden = true;
+    }
+  }, true);
   function refreshScreen() {
     if (!$("detail").hidden && shown[current]) openDetail(shown[current].id);
     else if (!$("tagscreen").hidden) renderTagScreen();
@@ -792,7 +798,7 @@
         if (!M.sameDoc(d, ch.after)) throw new GhError("The data changed since that save, so nothing was undone.", 0);
         return { next: ch.before, message: `Undo: ${ch.message}` };
       }, true);
-      undoBar("Undone · on the site in ~5 min", false);
+      undoBar("Undone", false);
       refreshScreen();
     } catch (err) { undoBar(err.message || "Couldn't undo. Try again.", false, true); }
     finally { $("undo-btn").disabled = false; }

@@ -324,14 +324,22 @@ def download_album(token: str, skip=None) -> list[Photo]:
     CACHE.mkdir(parents=True, exist_ok=True)
     photos: list[Photo | None] = []
     jobs = []  # (index in photos, url, dest) for originals still to fetch
+    seen: set[str] = set()
+    dupes = 0
     for it in items:
         pid = hashlib.sha1(it["checksum"].encode()).hexdigest()[:12]
+        if pid in seen:  # the same photo added to the album twice: keep the first
+            dupes += 1
+            continue
+        seen.add(pid)
         dest = CACHE / f"{pid}.img"
         cached = skip and skip(pid) and not dest.exists()
         photos.append(Photo(id=pid, source=None if cached else dest, caption=it["caption"], taken=it["taken"],
                             added=it["added"]))
         if not cached and not dest.exists():
             jobs.append((len(photos) - 1, it["url"], dest))
+    if dupes:
+        print(f"  {dupes} duplicate photo(s) in the album (added twice); each shown once")
     # Fetch new originals several at a time (big batches of new photos).
     if jobs:
         print(f"  downloading {len(jobs)} new photos")
@@ -1158,6 +1166,8 @@ def render_cached(photo: Photo, key: str, trim: bool, meta, out: Path, cache: Pa
         (cache / photo.id / "entry.json").write_text(json.dumps(data))
     for f in (cache / photo.id / "img").iterdir():
         target = out / "img" / f.name
+        if target.exists():
+            continue  # already placed (e.g. the same photo listed twice)
         try:
             os.link(f, target)          # same disk: instant, no extra space
         except OSError:
@@ -1238,6 +1248,10 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True, img_base: s
     trim = config.get("trim_white_borders", False)
     key = render_key(config)
     cache = RENDER_CACHE if use_cache else OUT.parent / ".cache" / f"rendered-tmp-{os.getpid()}"
+    unique: dict[str, Photo] = {}
+    for p in photos:
+        unique.setdefault(p.id, p)  # one entry per photo, even if listed twice
+    photos = list(unique.values())
     prerender(photos, key, trim, meta, cache)
     for p in photos:
         e = render_cached(p, key, trim, meta, OUT, cache)

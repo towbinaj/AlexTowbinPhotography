@@ -1099,3 +1099,20 @@ def test_model_rename_collection():
     colls, dup, same, orig = _node_model(script)
     assert colls == [{"name": "Rome and Florence", "photos": ["a", "b"]}, {"name": "Greece", "photos": ["c"]}]
     assert "already a collection" in dup and same is True and orig == "Italy 2026"
+
+
+
+def test_duplicate_photo_in_album_is_shown_once(tmp_path, monkeypatch):
+    items = [{"checksum": c, "url": f"https://example.org/{i}", "caption": "", "taken": "", "added": ""}
+             for i, c in enumerate(["same", "other", "same"])]
+    monkeypatch.setattr(build, "CACHE", tmp_path)
+    monkeypatch.setattr(build, "fetch_cloudkit_album", lambda token: ("Album", items))
+    monkeypatch.setattr(build, "fetch_original", lambda url, dest: dest.write_bytes(b"x") or True)
+    photos = build.download_album("1TOKEN")
+    assert len(photos) == 2 and len({p.id for p in photos}) == 2
+    # And the build itself copes with a repeated photo (any source).
+    monkeypatch.setattr(build, "OUT", tmp_path / "_site")
+    demo = build.demo_photos(2)
+    build.build(demo + [demo[0]], {"name": "Test"}, use_cache=False)
+    listed = json.loads((tmp_path / "_site" / "photos.json").read_text())
+    assert [e["id"] for e in listed].count(demo[0].id) == 1

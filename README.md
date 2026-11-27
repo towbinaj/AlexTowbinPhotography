@@ -174,6 +174,10 @@ background) and opens full screen.
   they are **not private**: their image files are still on the site (that's
   what lets the editor show them and makes releasing instant), so someone
   who knows where to look could find them.
+- **Rename a collection:** tap its name in the filters, then **Rename**
+  (photos and order stay; a name another collection has is refused). Its
+  web address changes with the name, so old shared links to that collection
+  open the full Work page instead.
 - **Order** (top bar): drag photos into order instead of typing numbers.
   From the normal grid it orders the **Work page** (only photos shown on the
   site; hidden ones keep their places); with a

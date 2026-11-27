@@ -252,3 +252,7 @@ body:has(.bulkbar:not([hidden])) .undo, body:has(.rsel:not([hidden])) .undo { bo
 .undo.err { border-color: var(--bad); color: var(--bad); }
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+/* Shown under the filters when a collection is selected */
+.collbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px var(--pad) 10px; color: var(--muted); }
+.collbar #coll-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

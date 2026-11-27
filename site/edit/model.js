@@ -126,6 +126,18 @@
     return out;
   }
   // Renaming onto an existing tag merges the two.
+  // Rename a collection (photos and order stay). Refuses a name another
+  // collection already has; returns the doc unchanged if nothing changes.
+  function renameCollection(doc, from, to, cleanTitle) {
+    const out = copy(doc), c = out.collections.find((x) => x.name === from);
+    const name = cleanName(to, cleanTitle);
+    if (!c || !name || name === c.name) return out;
+    if (out.collections.some((x) => x !== c && x.name.toLowerCase() === name.toLowerCase())) {
+      throw new Error(`There's already a collection called "${name}".`);
+    }
+    c.name = name;
+    return out;
+  }
   function renameTag(doc, from, to) {
     const out = copy(doc), old = findTag(out, from), n = Meta.cleanTag(to);
     if (!old || !n) return out;
@@ -372,7 +384,7 @@
   }
 
   const api = { normalize, orderPhotos, collectionOf, applyChange, describe, serialize, cleanName, MAX_NAME,
-    addTag, renameTag, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, onWork, placeOf, isAutoPlace, mainPosFromShown,
+    addTag, renameTag, renameCollection, deleteTag, tagCounts, placesInUse, findTag, applyBulk, describeBulk, isShown, onWork, placeOf, isAutoPlace, mainPosFromShown,
     reorderMain, reorderCollection, reorderHighlights, sameDoc };
   root.EditModel = api;
   if (typeof module !== "undefined") module.exports = api;

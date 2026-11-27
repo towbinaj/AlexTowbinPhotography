@@ -191,6 +191,9 @@
       chips.appendChild(b);
     }
     shown = photosFor(filter);
+    const coll = filter[0] === "c" ? doc.collections[Number(filter.slice(1))] : null;
+    $("collbar").hidden = !coll || selecting;
+    if (coll) $("coll-name").textContent = `Collection · ${coll.name}`;
     $("list-count").textContent = `${all.length} photos`;
     const grid = $("grid"); grid.textContent = "";
     shown.forEach((p) => {
@@ -973,6 +976,27 @@
       listStatus("New order saved · on the site in ~5 min");
     } catch (err) { $("ro-save").disabled = false; alert(err.message || "Couldn't save. Try again."); }
     finally { $("ro-save").textContent = "Save"; }
+  });
+
+  // ---------------- rename a collection ----------------
+  $("coll-rename").addEventListener("click", async () => {
+    const c = filter[0] === "c" ? doc.collections[Number(filter.slice(1))] : null;
+    if (!c) return;
+    const to = prompt("Rename collection", c.name);
+    if (to == null || !to.trim() || to.trim() === c.name) return;
+    listStatus("Saving…");
+    try {
+      let newName = "";
+      await commit((d) => {
+        const next = M.renameCollection(d, c.name, to, clean);
+        newName = (next.collections.find((x, i) => i === d.collections.findIndex((y) => y.name === c.name)) || {}).name || "";
+        return { next, message: `Rename collection "${c.name}" to "${newName}"` };
+      });
+      const i = doc.collections.findIndex((x) => x.name === newName);
+      if (i >= 0) filter = "c" + i;
+      renderList();
+      listStatus("Renamed · on the site in ~5 min");
+    } catch (err) { listStatus(err.message || "Couldn't save. Try again.", true); }
   });
 
   // ---------------- tag library ----------------

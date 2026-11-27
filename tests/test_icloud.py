@@ -1084,3 +1084,18 @@ def test_model_use_photo_gps_clears_choice_and_removal():
     assert before == "Italy" and one == "Fira" and one_auto is True and msg == "Photo a: location from photo GPS"
     assert bulk_q == "Oia" and bulk_np == [] and bulk_locs == []
     assert bmsg == "2 photos: location from photo GPS" and msg_b == "Photo b: location from photo GPS"
+
+
+def test_model_rename_collection():
+    script = """
+    let d = M.normalize({collections:[{name:'Italy 2026', photos:['a','b']}, {name:'Greece', photos:['c']}], order:['a','b','c']}, cleanTitle);
+    const r = M.applyChange(d, {id:'a', title:'x'}, cleanTitle);
+    const ren = M.renameCollection(d, 'Italy 2026', '  rome and florence ', cleanTitle);
+    let dup = '';
+    try { M.renameCollection(d, 'Italy 2026', 'GREECE', cleanTitle); } catch (e) { dup = e.message; }
+    const same = M.renameCollection(d, 'Italy 2026', '', cleanTitle);
+    process.stdout.write(JSON.stringify([ren.collections, dup, M.sameDoc(same, d), d.collections[0].name]));
+    """
+    colls, dup, same, orig = _node_model(script)
+    assert colls == [{"name": "Rome and Florence", "photos": ["a", "b"]}, {"name": "Greece", "photos": ["c"]}]
+    assert "already a collection" in dup and same is True and orig == "Italy 2026"

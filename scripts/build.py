@@ -1216,14 +1216,26 @@ def image_host_ready(client, bucket: str, url: str, get=None) -> bool:
     """Put the image host's robots.txt in the bucket and check that it can be
     read back through the public address. If not (domain not connected yet,
     wrong bucket, bad key), the build keeps the images on Pages."""
+    # "::warning::" lines show on the GitHub Actions run's summary page.
     try:
         client.put_object(Bucket=bucket, Key="robots.txt", Body=IMAGE_ROBOTS.encode(), ContentType="text/plain",
                           CacheControl="public, max-age=3600")
-        r = (get or requests.get)(f"{url}/robots.txt", timeout=20)
-        return r.status_code == 200 and "User-agent" in r.text
     except Exception as err:  # noqa: BLE001 (any failure means: not ready)
-        print(f"  image host check failed: {err.__class__.__name__}", file=sys.stderr)
+        code = getattr(err, "response", {}).get("Error", {}).get("Code", "") if hasattr(err, "response") else ""
+        print(f"::warning::Image host: couldn't upload to the R2 bucket ({err.__class__.__name__} {code}). "
+              "Check the R2_* secrets, the bucket name and the token's Object Read & Write permission.")
         return False
+    try:
+        r = (get or requests.get)(f"{url}/robots.txt", timeout=20)
+    except Exception as err:  # noqa: BLE001
+        print(f"::warning::Image host: {url} didn't answer ({err.__class__.__name__}). "
+              "Is the custom domain connected and Active in R2?")
+        return False
+    if r.status_code != 200 or "User-agent" not in r.text:
+        print(f"::warning::Image host: uploaded fine, but {url}/robots.txt returned HTTP {r.status_code}. "
+              "Is the custom domain connected to this bucket and Active?")
+        return False
+    return True
 
 
 def sync_images(client, bucket: str, folder: Path, prefix: str = "img/") -> dict:

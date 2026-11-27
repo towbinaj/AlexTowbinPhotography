@@ -1067,3 +1067,20 @@ def test_model_remove_location_turns_off_auto_place():
     assert msg == "Photo a: location removed"
     assert before == ["Fira", True] and rem is None and rem_list == ["a"] and ser == ["a"]
     assert chosen == "Italy" and chosen_auto is False and chosen_list == []
+
+
+def test_model_use_photo_gps_clears_choice_and_removal():
+    script = """
+    const p = {id:'a', auto_place:{level:'city', gid:1, city:'Fira', country:'Greece', cc:'GR'}};
+    const q = {id:'b', auto_place:{level:'city', gid:2, city:'Oia', country:'Greece', cc:'GR'}};
+    let d = M.normalize({locations:{a:{level:'country', country:'Italy', cc:'IT'}}, no_place:['b']}, cleanTitle);
+    const one = M.applyChange(d, {id:'a', useGps:true}, cleanTitle);
+    const bulk = M.applyBulk(d, ['a','b'], {useGps:true}, cleanTitle);
+    process.stdout.write(JSON.stringify([M.placeOf(d, p).country, M.placeOf(one, p).city, M.isAutoPlace(one, p),
+      M.describe(d, one, 'a'), M.placeOf(bulk, q).city, bulk.no_place, Object.keys(bulk.locations),
+      M.describeBulk(['a','b'], {useGps:true}), M.describe(d, M.applyChange(d, {id:'b', useGps:true}, cleanTitle), 'b')]));
+    """
+    before, one, one_auto, msg, bulk_q, bulk_np, bulk_locs, bmsg, msg_b = _node_model(script)
+    assert before == "Italy" and one == "Fira" and one_auto is True and msg == "Photo a: location from photo GPS"
+    assert bulk_q == "Oia" and bulk_np == [] and bulk_locs == []
+    assert bmsg == "2 photos: location from photo GPS" and msg_b == "Photo b: location from photo GPS"

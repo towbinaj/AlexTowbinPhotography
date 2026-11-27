@@ -232,10 +232,11 @@
   const NEW = " new"; // never a real name: names are trimmed
   let base = null; // field values when the photo was opened, to detect changes
   let pendingTags = [], pendingPlace = null, autoKey = ""; // autoKey: the automatic (GPS) place, if that's what's shown
+  let pendingGps = false; // "Use photo GPS" tapped: drop the chosen place, use the automatic one
   function values() {
     const coll = $("f-coll").value === NEW ? M.cleanName($("f-newcoll").value, clean) : $("f-coll").value;
     return { title: clean($("f-title").value), collection: coll, cpos: $("f-cpos").value, high: $("f-high").checked, mpos: $("f-mpos").value, shown: $("f-shown").checked, work: $("f-work").checked,
-      tags: pendingTags.join("\n"), place: Meta.placeKey(pendingPlace) };
+      tags: pendingTags.join("\n"), place: (pendingGps ? "gps:" : "") + Meta.placeKey(pendingPlace) };
   }
   function dirty() { const v = values(); return !!base && Object.keys(v).some((k) => String(v[k]) !== String(base[k])); }
   function refreshSave() { $("f-save").disabled = !dirty(); }
@@ -278,7 +279,7 @@
     $("f-work").checked = M.onWork(doc, p);
     shownNote();
     pendingTags = (doc.photo_tags[p.id] || []).slice();
-    pendingPlace = M.placeOf(doc, p);
+    pendingPlace = M.placeOf(doc, p); pendingGps = false;
     autoKey = M.isAutoPlace(doc, p) ? Meta.placeKey(pendingPlace) : "";
     $("f-tag-in").value = "";
     renderTags(); renderPlace();
@@ -321,7 +322,7 @@
     if (v.shown !== base.shown) change.shown = v.shown;
     if (v.work !== base.work) change.work = v.work;
     if (v.tags !== base.tags) change.tags = pendingTags.slice();
-    if (v.place !== base.place) change.place = pendingPlace;
+    if (v.place !== base.place) { if (pendingGps) change.useGps = true; else change.place = pendingPlace; }
     if (String(v.mpos) !== String(base.mpos) && v.mpos !== "") {
       const max = Number($("f-mpos").max) || 1;
       const n = Math.round(Number(v.mpos));
@@ -445,14 +446,20 @@
   // ---------------- location on a photo ----------------
   function renderPlace() {
     const pl = $("f-place");
-    const auto = !!pendingPlace && autoKey === Meta.placeKey(pendingPlace);
+    const auto = pendingGps || (!!pendingPlace && autoKey === Meta.placeKey(pendingPlace));
+    const p = shown[current], gps = p && Meta.cleanPlace(p.auto_place);
+    $("f-place-gps").hidden = !gps || auto;
     pl.textContent = pendingPlace ? Meta.placeLabel(pendingPlace) + (auto ? " · from photo GPS" : "") : "Not set";
     pl.classList.toggle("none", !pendingPlace);
     $("f-place-clear").hidden = !pendingPlace;
     $("f-place-pick").textContent = pendingPlace ? "Change" : "Choose";
   }
-  $("f-place-clear").addEventListener("click", () => { pendingPlace = null; renderPlace(); refreshSave(); });
-  $("f-place-pick").addEventListener("click", () => picker.open((pl) => { pendingPlace = pl; renderPlace(); refreshSave(); }));
+  $("f-place-clear").addEventListener("click", () => { pendingPlace = null; pendingGps = false; renderPlace(); refreshSave(); });
+  $("f-place-gps").addEventListener("click", () => {
+    const p = shown[current];
+    pendingPlace = p && Meta.cleanPlace(p.auto_place); pendingGps = !!pendingPlace; renderPlace(); refreshSave();
+  });
+  $("f-place-pick").addEventListener("click", () => picker.open((pl) => { pendingPlace = pl; pendingGps = false; renderPlace(); refreshSave(); }));
 
   // Built-in places list (site/edit/places.json, from GeoNames), loaded on first use.
   const picker = (() => {
@@ -523,6 +530,13 @@
       const ul = $("picker-results"), q = $("picker-q").value.trim();
       ul.textContent = "";
       const pick = (pl) => { const fn = onPick; close(); fn(pl); };
+      if (!q && extra) {
+        const li = el("li"), btn = el("button");
+        btn.type = "button";
+        btn.append(el("span", "", extra.label), el("span", "sub mono", extra.sub));
+        btn.addEventListener("click", () => { close(); extra.onClick(); });
+        li.appendChild(btn); ul.appendChild(li);
+      }
       if (!q) {
         const used = M.placesInUse(doc);
         if (used.length) { ul.appendChild(el("li", "head mono", "Your places")); for (const pl of used) ul.appendChild(item(pl, pick)); }
@@ -536,12 +550,13 @@
     let timer;
     $("picker-q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(render, 150); });
     $("picker-cancel").addEventListener("click", () => close());
-    let onPick = null, back = "detail";
+    let onPick = null, back = "detail", extra = null;
     function close() { show(back); if (back === "detail") $("f-place-pick").focus(); }
     return {
       // pick(place) is called with the chosen place; returns to `from`.
-      open(pickFn, from = "detail", title = "Location") {
-        onPick = pickFn; back = from;
+      // extra: an optional first row {label, sub, onClick} (bulk: "Use each photo's GPS").
+      open(pickFn, from = "detail", title = "Location", extraRow = null) {
+        onPick = pickFn; back = from; extra = extraRow;
         $("picker-h").textContent = title;
         $("picker-q").value = "";
         show("picker"); render(); $("picker-q").focus();
@@ -765,7 +780,9 @@
   $("bulk-hide").addEventListener("click", () => { listStatus("Saving…"); bulkSave({ shown: false }, "list"); });
   $("bulk-place").addEventListener("click", () => {
     const n = selected.size;
-    picker.open((pl) => bulkSave({ place: pl }, "list"), "list", `Location · ${n} photo${n === 1 ? "" : "s"}`);
+    picker.open((pl) => bulkSave({ place: pl }, "list"), "list", `Location · ${n} photo${n === 1 ? "" : "s"}`,
+      { label: "Use each photo's GPS location", sub: "Clears the chosen places; photos without GPS get none",
+        onClick: () => bulkSave({ useGps: true }, "list") });
   });
 
   // ---------------- undo ----------------

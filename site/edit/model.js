@@ -230,6 +230,11 @@
       out.no_place = out.no_place.filter((x) => x !== id);
       if (!pl) out.no_place.push(id);
     }
+    if (change.useGps) {
+      // Back to the automatic place from the photo's GPS (if it has one).
+      delete out.locations[id];
+      out.no_place = out.no_place.filter((x) => x !== id);
+    }
     if (has(change, "shown")) {
       // Explicit either way, so it overrides the drafts_from rule.
       out.hidden = out.hidden.filter((x) => x !== id);
@@ -266,6 +271,7 @@
       }
       if (has(op, "collection")) change.collection = op.collection || "";
       if (has(op, "place")) change.place = op.place;
+      if (op.useGps) change.useGps = true;
       if (has(op, "shown")) change.shown = !!op.shown;
       if (has(op, "highlight")) change.highlight = !!op.highlight;
       if (has(op, "work")) change.work = !!op.work;
@@ -280,6 +286,7 @@
     if ((op.removeTags || []).length) parts.push(`tags -${op.removeTags.join(", -")}`);
     if (has(op, "collection")) parts.push(op.collection ? `collection "${op.collection}"` : "no collection");
     if (has(op, "place")) parts.push(op.place ? `location ${Meta.placeLabel(op.place)}` : "location removed");
+    if (op.useGps) parts.push("location from photo GPS");
     if (has(op, "shown")) parts.push(op.shown ? "shown on site" : "hidden from site");
     if (has(op, "highlight")) parts.push(op.highlight ? "highlighted" : "highlight removed");
     if (has(op, "work")) parts.push(op.work ? "on Work page" : "off Work page");
@@ -340,6 +347,8 @@
     const l0 = Meta.placeKey(before.locations[id]), l1 = Meta.placeKey(after.locations[id]);
     if (l0 !== l1) parts.push(l1 ? `location ${Meta.placeLabel(after.locations[id])}` : "location removed");
     else if (!l1 && !before.no_place.includes(id) && after.no_place.includes(id)) parts.push("location removed");
+    else if (!l1 && before.no_place.includes(id) && !after.no_place.includes(id)) parts.push("location from photo GPS");
+    if (l0 && !l1 && !after.no_place.includes(id)) parts[parts.length - 1] = "location from photo GPS";
     const s0 = before.published.includes(id) ? 1 : before.hidden.includes(id) ? -1 : 0;
     const s1 = after.published.includes(id) ? 1 : after.hidden.includes(id) ? -1 : 0;
     if (s0 !== s1 && s1) parts.push(s1 > 0 ? "shown on site" : "hidden from site");

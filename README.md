@@ -152,7 +152,9 @@ background) and opens full screen.
   their city, e.g. Newport KY → Cincinnati, Brooklyn → New York City): the build reads
   the position only to pick the town and never stores or publishes it. Your
   own choice always wins; **Remove** clears it for good (no automatic place
-  either).
+  either). **Use photo GPS** (on a photo, or first in the Location picker
+  when several are selected) drops the chosen place and goes back to the
+  automatic one.
 - **Search** (top of the grid) by title, place, tag or collection; filters
   include *Shown* (on the site), *Hidden*, *Untitled* and *No location*.
 - **On Work page:** a checkmark on each photo. Photos added to the album from

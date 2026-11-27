@@ -148,7 +148,8 @@ background) and opens full screen.
   English where GeoNames has it ("Heraklion", not "Irákleion"; either
   spelling finds it); for a smaller place choose its state/region. *Photo GPS* separately says whether the image file itself
   kept its location (yes/no only). **Photos with GPS get their nearest town
-  or island automatically** (shown as "… · from photo GPS"): the build reads
+  or island automatically** (shown as "… · from photo GPS"; suburbs count as
+  their city, e.g. Newport KY → Cincinnati, Brooklyn → New York City): the build reads
   the position only to pick the town and never stores or publishes it. Your
   own choice always wins; **Remove** clears it for good (no automatic place
   either).

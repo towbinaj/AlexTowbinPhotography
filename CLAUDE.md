@@ -72,7 +72,8 @@ to Pages when R2 isn't configured. Photos are **never committed**.
   file has GPS) is yes/no only. **Automatic place (owner chose "apply
   automatically", 2026-11-27):** for a photo with GPS the build reads the
   coordinates *in memory only*, picks the nearest town/island
-  (`nearest_place()`, size-weighted, ≤60 km, positions in the build-only
+  (`nearest_place()`, size-weighted, suburbs go to their city of 100k+
+  within its metro radius, owner's rule; ≤60 km; positions in the build-only
   `scripts/place_coords.json`) and keeps just that place (`auto_place`).
   Never write, log or publish the photo's coordinates. The editor's choice
   wins; Remove adds the id to `no_place` (no automatic place either). Rule:

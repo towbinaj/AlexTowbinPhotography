@@ -976,7 +976,18 @@ def test_read_gps_and_nearest_place(tmp_path):
     river = (TOY_PLACES[0] | {"cities": TOY_PLACES[0]["cities"] + [[4302529, "Newport", 1, 1]]},
              TOY_PLACES[1] + [[39.09, -84.50, 15000]])
     assert build.nearest_place(39.1031, -84.5120, river)["city"] == "Cincinnati"
-    assert build.nearest_place(39.0905, -84.4960, river)["city"] == "Newport"         # in Newport itself
+    # Suburbs go to their city: Newport (15k) is within Cincinnati's metro radius.
+    assert build.nearest_place(39.0905, -84.4960, river)["city"] == "Cincinnati"
+    # …but not across a border, and not when the photo is in another big city.
+    border = (river[0] | {"countries": river[0]["countries"] + [["CA", "Canada"]],
+                          "cities": river[0]["cities"] + [[1, "Border Town", -1, 2]]},
+              river[1] + [[39.20, -84.50, 5000]])
+    assert build.nearest_place(39.2005, -84.5000, border)["city"] == "Border Town"
+    # A big city outside the other's area keeps its name; inside it, the larger city wins.
+    twin = (river[0] | {"cities": river[0]["cities"] + [[2, "Far City", 1, 1], [3, "Borough", 1, 1]]},
+            river[1] + [[38.80, -84.51, 150000], [39.10, -84.50, 200000]])
+    assert build.nearest_place(38.8001, -84.5100, twin)["city"] == "Far City"
+    assert build.nearest_place(39.1001, -84.5000, twin)["city"] == "Cincinnati"
     f2 = _gps_jpeg(tmp_path / "s.jpg", -33.86, 151.2)
     with Image.open(f2) as im:
         assert build.read_gps(im)[0] < 0                                                # southern hemisphere

@@ -479,6 +479,8 @@ def read_gps(im: Image.Image) -> tuple[float, float] | None:
 PLACES_FILE = SITE_SRC / "edit" / "places.json"
 COORDS_FILE = ROOT / "scripts" / "place_coords.json"
 AUTO_PLACE_MAX_KM = 60   # farther than this from any town or island: no automatic place
+METRO_MIN_POP = 100_000  # cities this big take in their suburbs…
+METRO_MAX_KM = 40        # …out to 0.045 km × √population, at most this far
 AUTO_PLACE_VERSION = 1   # bump to recompute every photo's automatic place
 _places_cache: dict = {}
 
@@ -501,14 +503,20 @@ def nearest_place(lat: float, lon: float, places=None) -> dict | None:
     AUTO_PLACE_MAX_KM. Bigger places reach further: the pick is the place with
     the smallest distance relative to its reach (about 0.02 km × √population,
     at least 1 km), so downtown Cincinnati is Cincinnati, not Newport across
-    the river, while a photo in a suburb still gets the suburb."""
+    the river. Suburbs go to their city: a city of 100,000+ people takes any
+    photo within its metro radius (0.045 km × √population, ≤40 km; about
+    25 km for Cincinnati) in the same country; within several big cities'
+    own areas, the largest wins (Manhattan and Brooklyn are New York City).
+    A big city on its own (Heraklion, Florence) keeps its name."""
     import math
     data = places or _places()
     if not data:
         return None
     p, coords = data
     k = math.cos(math.radians(lat))
-    best, best_score = -1, float("inf")
+    best, best_score = -1, float("inf")     # the town the photo is in
+    hub, hub_score = -1, float("inf")       # the big city whose metro it's in
+    inside, inside_score = -1, float("inf")  # a big city whose own area it's in
     for i, c in enumerate(coords):
         if c[0] is None or abs(c[0] - lat) > 0.6:  # ~65 km: cheap pre-filter
             continue
@@ -516,11 +524,25 @@ def nearest_place(lat: float, lon: float, places=None) -> dict | None:
         km = math.hypot(c[0] - lat, dlon * k) * 111.2
         if km > AUTO_PLACE_MAX_KM:
             continue
-        reach = max(1.0, 0.02 * math.sqrt(c[2] if len(c) > 2 and c[2] else 0))
+        pop = c[2] if len(c) > 2 and c[2] else 0
+        reach = max(1.0, 0.02 * math.sqrt(pop))
         if km / reach < best_score:
             best, best_score = i, km / reach
+        if pop >= METRO_MIN_POP:
+            if km <= min(reach, METRO_MAX_KM) and -pop < inside_score:  # the largest wins
+                inside, inside_score = i, -pop
+            metro = min(METRO_MAX_KM, 0.045 * math.sqrt(pop))
+            if km <= metro and km / metro < hub_score:
+                hub, hub_score = i, km / metro
     if best < 0:
         return None
+    cities = p["cities"]
+    town_pop = coords[best][2] if len(coords[best]) > 2 and coords[best][2] else 0
+    same = lambda i: cities[i][3] == cities[best][3]  # same country
+    if inside >= 0 and -inside_score > town_pop and same(inside):
+        best = inside  # within a larger city's own area (boroughs → New York City)
+    elif town_pop < METRO_MIN_POP and hub >= 0 and same(hub):
+        best = hub     # a suburb: use its city
     gid, name, ri, ci = p["cities"][best][:4]
     cc, country = p["countries"][ci]
     raw = {"level": "city", "gid": gid, "city": name, "country": country, "cc": cc}

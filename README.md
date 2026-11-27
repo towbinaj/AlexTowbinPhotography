@@ -154,7 +154,7 @@ background) and opens full screen.
   now on start **unchecked**: they appear in their collection (and on Home if
   you ★ them) but not in the Work page's full list until you tick **On Work
   page** (or select several and tap **On Work**). Photos that were already
-  on the site stay on Work. The *On Work* filter lists what visitors see on the Work page (in its order); *Not on Work* lists the rest.
+  on the site stay on Work. The *On Work* filter lists what visitors see on the Work page (in its order); *Not on Work* lists the rest. *Not ★* lists photos that aren't highlights yet, for picking new ones.
 - **Show on site:** photos you add to the album **appear on the site right
   away** (site-first, since 2026-11-26); untick **Show on site** or tap
   **Hide** to pull one back. Photos added from 2026-11-18 until then started

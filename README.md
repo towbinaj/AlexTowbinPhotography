@@ -327,8 +327,10 @@ photo has six sizes). So the images are served from a Cloudflare R2 bucket
 `image_url` in `config.json` is the public address. Each build uploads only
 new or changed images, deletes the images of photos no longer in the album
 (never more than half at once, as a safety check) and puts a `robots.txt` on
-the image host that turns away all AI crawlers. Without the secrets the
-images stay on Pages as before.
+the image host that turns away all AI crawlers. Before switching, each build
+checks that `image_url` actually serves the bucket; if not (domain not
+connected yet, wrong key), it keeps the images on Pages that time. Without
+the secrets the images stay on Pages as before.
 
 ## Visitor counts (optional)
 With a free [GoatCounter](https://www.goatcounter.com/) account, the site

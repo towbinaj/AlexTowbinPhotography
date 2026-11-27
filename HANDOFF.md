@@ -1,26 +1,30 @@
 # Handoff — Alex Towbin Photography
 
-Status as of 2026-11-18. Read `CLAUDE.md` first for rules and preferences.
+Status as of 2026-11-27. Read `CLAUDE.md` first for rules and preferences.
+The dated sections below are history, newest decisions noted where they
+supersede older ones.
 
-## Current state: live ✅
+## Current state: live ✅ (2026-11-27)
 - **Site:** https://photo.alextowbin.com/ (since 2026-11-26; the old
-  `towbinaj.github.io/AlexTowbinPhotography/` redirects)
-- **First deploy:** Actions run #1 succeeded. 32 photos, ~55 MB site, ~2 min
-  build. Originals (~460 MB) are cached in Actions (`.cache/originals`), so
-  later runs only download new photos.
-- **Repo setup done by the owner:**
-  - secret `ICLOUD_ALBUM` set
-  - Pages source set to **GitHub Actions**
-- **Now:** 34 photos, 30 with owner titles (in `curation.json`).
-- **Branches:**
-  - `main` is live. All `claude/*` feature branches from 2026-11-17/18
-    (hero-border-fix, tile-hover-border, opaque-header, title-editor,
-    curation, title-case) are merged.
-  - `claude/location-check` is **experimental and unmerged**: an opt-in
-    `LOCATION_REPORT` diagnostic (field names/counts only, safe for public
-    logs), album-comment/post-caption lookups that turned out not to work,
-    and a **temporary** `push` trigger for that branch in `deploy.yml`.
-    Don't merge it as is; salvage the diagnostic if useful, or delete it.
+  `towbinaj.github.io/AlexTowbinPhotography/` redirects). Four pages: Home
+  (intro, slideshow, ★ highlights), Work (justified rows), Collections
+  (covers), About (bio, prints). Copyright block on every page.
+- **Photos:** ~633 in the album (owner added hundreds on 2026-11-26).
+  Processed images are on **Cloudflare R2** (`img.alextowbin.com`); the
+  Pages site is ~3 MB. The rendered cache in Actions means only new photos
+  are processed; a big batch takes ~25 min the first time.
+- **Owner's workflow (site-first):** add photos to the album → in the editor
+  put them in collections, ★ favourites, tick *On Work page* → **Publish
+  now**. New photos show at once (not on Work until ticked).
+- **Repo setup done by the owner:** secrets `ICLOUD_ALBUM` and the four
+  `R2_*`; Pages source **GitHub Actions**; custom domain + HTTPS; domain
+  verified on GitHub; Bing Webmaster Tools verified (file
+  `site/BingSiteAuth.xml`) with the sitemap submitted.
+- **Branches:** `main` is live; work happens on
+  `claude/elegant-hypatia-rpwb2z` and is merged only on the owner's explicit
+  OK. Old `claude/*` branches (and the experimental, unmerged
+  `claude/location-check`) can be deleted by the owner on GitHub's Branches
+  page; the session isn't allowed to delete branches.
 
 ## How the photo sync works (`scripts/build.py`)
 The owner's album is a **new-style iCloud shared album ("Shared Collection")**.
@@ -125,7 +129,7 @@ supported as a fallback, which `download_album()` picks from the token shape.
 - **Embedded description:** only the 7 Olympus photos have
   `ImageDescription`, all the camera default "OLYMPUS DIGITAL CAMERA".
 
-## Next project: phone editing app (approved by the owner, in progress)
+## Phone editing app (built and live; history of how it got here)
 
 **Step 1 done on branch `claude/elegant-hypatia-rpwb2z` (not merged yet):**
 `curation.json` moved to the public data repo
@@ -265,9 +269,8 @@ cached photos skip the download entirely (`download_album(skip=…)`), stale
 dirs are pruned. CI caches `.cache/rendered` instead of originals (~1.7 MB vs
 ~14 MB a photo; the 10 GB Actions cache now fits ~5,800 photos); a one-time
 bridge restores the old originals cache when no rendered cache exists.
-Storage plan agreed with the owner: stay on GitHub Pages (1 GB ≈ 550
-photos); near ~500 photos, drop the 3200 px size or move images to
-Cloudflare R2. Owner asked about Google Drive/Dropbox: not suitable
+Storage plan (superseded 2026-11-27): Pages hit 1.45 GB at 633 photos and
+the images moved to Cloudflare R2 (see "Image host" above). Owner asked about Google Drive/Dropbox: not suitable
 (throttled links, expiring OAuth tokens).
 **Visitor counts (2026-11-21, branch):** GoatCounter, owner's choice of
 "visitor numbers". config `goatcounter` (site code) -> config.json `counter`
@@ -321,29 +324,23 @@ a **main-page highlight**, and **check its location**. Agreed design:
    app replaces it, then remove it.
 
 ## Open items / ideas
-1. **Tagline** is now the owner's Instagram bio. `about` is still empty, so
-   the About section is hidden.
-2. ~~Repo rename to `towbinaj.github.io`~~ Superseded: the owner bought
-   `alextowbin.com` (Cloudflare) and the site moved to the subdomain
-   `photo.alextowbin.com` (CNAME, DNS only; domain verified on GitHub).
-   `robots.txt` now sits at a domain root, so the AI-crawler blocks apply.
-   The editor app's storage is per address: the owner re-installs it from
-   `/edit/` and re-enters both keys + Face ID.
-3. **Fail the CI build if `ICLOUD_ALBUM` is missing**, rather than deploying
-   an empty gallery.
-4. **Actions warning:** Node 20 is deprecated. Bump `actions/checkout`,
-   `setup-python`, `cache`, `configure-pages`, `upload-pages-artifact`, and
-   `deploy-pages` to current majors.
-5. **GSD workflow.** The owner suggested https://github.com/open-gsd/gsd-core,
-   installed with `npx @opengsd/gsd-core@latest` and then `/gsd-onboard` for
-   an existing repo. It adds `/gsd-*` commands and keeps state in files like
-   `STATE.md`. Not installed yet. Ask before committing its files.
-6. **From the portfolio review (owner input needed):** About text + whether
-   to show an email (About section is hidden while `about` is empty);
-   collections (covered by the app project).
-7. **Possible features, not requested:**
-   - a print-inquiry form
-   - an optional subtle watermark
+1. **Google Search Console:** domain property `alextowbin.com`, TXT record
+   added in Cloudflare; verification was still pending on 2026-11-26 (DNS
+   delay). When verified, submit `https://photo.alextowbin.com/sitemap.xml`.
+2. **Indexing:** Bing has the sitemap. ChatGPT couldn't open the site while
+   it was unindexed ("not accessible via this tool"); retry once indexed.
+3. **Old branches:** owner may delete them on GitHub (see Current state).
+4. **Email:** prints@alextowbin.com forwards via Cloudflare
+   Email Routing; DMARC was suggested (Email → DMARC Management), not
+   confirmed done.
+5. **GSD workflow.** The owner suggested https://github.com/open-gsd/gsd-core
+   (`npx @opengsd/gsd-core@latest`, then `/gsd-onboard`). Not installed. Ask
+   before committing its files.
+6. **Possible features, not requested:** an optional subtle watermark.
+
+Done since the older list: About text, prints inquiries (email + Inquire
+link), CI fails on a missing album secret, Actions bumped to current majors,
+domain move.
 
 ## Cloud environment notes
 - The session that built this used a personal environment, **"Photography

@@ -18,8 +18,9 @@ supersede older ones.
   now**. New photos show at once (not on Work until ticked).
 - **Repo setup done by the owner:** secrets `ICLOUD_ALBUM` and the four
   `R2_*`; Pages source **GitHub Actions**; custom domain + HTTPS; domain
-  verified on GitHub; Bing Webmaster Tools verified (file
-  `site/BingSiteAuth.xml`) with the sitemap submitted.
+  verified on GitHub; Bing Webmaster Tools and Google Search Console verified
+  (files `site/BingSiteAuth.xml`, `site/google200abc424b5554f0.html`; keep
+  them) with the sitemap submitted to both.
 - **Branches:** `main` is live; work happens on
   `claude/elegant-hypatia-rpwb2z` and is merged only on the owner's explicit
   OK. Old `claude/*` branches (and the experimental, unmerged
@@ -330,9 +331,10 @@ a **main-page highlight**, and **check its location**. Agreed design:
    app replaces it, then remove it.
 
 ## Open items / ideas
-1. **Google Search Console:** domain property `alextowbin.com`, TXT record
-   added in Cloudflare; verification was still pending on 2026-11-26 (DNS
-   delay). When verified, submit `https://photo.alextowbin.com/sitemap.xml`.
+1. ~~Google Search Console~~ Done 2026-11-27: verified as a URL-prefix
+   property (`https://photo.alextowbin.com/`) with the file
+   `site/google200abc424b5554f0.html` (the domain TXT route never verified);
+   sitemap submitted. Bing likewise (`site/BingSiteAuth.xml`).
 2. **Indexing:** Bing has the sitemap. ChatGPT couldn't open the site while
    it was unindexed ("not accessible via this tool"); retry once indexed.
 3. **Old branches:** owner may delete them on GitHub (see Current state).

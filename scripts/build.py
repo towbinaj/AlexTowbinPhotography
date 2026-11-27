@@ -1212,6 +1212,20 @@ def r2_client(s: dict):
                         aws_access_key_id=s["key_id"], aws_secret_access_key=s["secret"], region_name="auto")
 
 
+def image_host_ready(client, bucket: str, url: str, get=None) -> bool:
+    """Put the image host's robots.txt in the bucket and check that it can be
+    read back through the public address. If not (domain not connected yet,
+    wrong bucket, bad key), the build keeps the images on Pages."""
+    try:
+        client.put_object(Bucket=bucket, Key="robots.txt", Body=IMAGE_ROBOTS.encode(), ContentType="text/plain",
+                          CacheControl="public, max-age=3600")
+        r = (get or requests.get)(f"{url}/robots.txt", timeout=20)
+        return r.status_code == 200 and "User-agent" in r.text
+    except Exception as err:  # noqa: BLE001 (any failure means: not ready)
+        print(f"  image host check failed: {err.__class__.__name__}", file=sys.stderr)
+        return False
+
+
 def sync_images(client, bucket: str, folder: Path, prefix: str = "img/") -> dict:
     """Make the bucket's `prefix` match `folder`: upload files that are missing
     or differ in size, delete ones that are gone. Deletes nothing if more than
@@ -1269,10 +1283,14 @@ def main() -> int:
         print(f"No ICLOUD_ALBUM set; using {len(photos)} photos from photos/")
 
     r2 = None if args.demo else r2_settings(config)
+    client = r2_client(r2) if r2 else None
+    if r2 and not image_host_ready(client, r2["bucket"], r2["url"]):
+        print(f"{r2['url']} isn't serving the bucket yet; keeping images on Pages this time.", file=sys.stderr)
+        r2 = None
     build(photos, config, use_cache=not args.demo, img_base=r2["url"] if r2 else "")  # demo images aren't cached
     if r2:
         # Images go to R2; the Pages site keeps only the pages.
-        stats = sync_images(r2_client(r2), r2["bucket"], OUT / "img")
+        stats = sync_images(client, r2["bucket"], OUT / "img")
         shutil.rmtree(OUT / "img")
         print(f"Images on {r2['url']}: {stats['uploaded']} uploaded, {stats['deleted']} deleted, {stats['kept']} unchanged")
     return 0

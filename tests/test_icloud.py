@@ -879,3 +879,17 @@ def test_build_points_pages_at_the_image_host(tmp_path, monkeypatch):
     share = next(out.glob("p/*/index.html")).read_text()
     assert 'src="https://img.example.org/img/' in share and "https://img.example.org/img/" in share.split("og:image")[1][:200]
     assert "img-src 'self' data: https://img.example.org" in (out / "edit" / "index.html").read_text()
+
+
+def test_image_host_ready_checks_the_public_address():
+    class R:
+        def __init__(self, code, text):
+            self.status_code, self.text = code, text
+    fake = FakeBucket({})
+    assert build.image_host_ready(fake, "photos", "https://img.example.org", get=lambda u, timeout: R(200, "User-agent: *"))
+    assert fake.puts[0][0] == "robots.txt"
+    assert not build.image_host_ready(fake, "photos", "https://img.example.org", get=lambda u, timeout: R(404, ""))
+
+    def boom(u, timeout):
+        raise OSError("no such host")
+    assert not build.image_host_ready(fake, "photos", "https://img.example.org", get=boom)

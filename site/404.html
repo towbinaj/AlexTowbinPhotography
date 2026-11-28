@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- "Page not found" (GitHub Pages serves 404.html for any missing path, at
+       any depth, so links here start at the site root: {{BASE}}). No scripts. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Page not found — {{SITE_NAME}}</title>
+  <meta name="theme-color" content="#0b0b0a">
+  <meta name="author" content="{{AUTHOR}}">
+  <meta name="copyright" content="{{COPYRIGHT}}">
+  <meta name="robots" content="noindex, noai, noimageai">
+  <link rel="icon" href="{{BASE}}favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="{{BASE}}apple-touch-icon.png">
+  <link rel="preload" href="{{BASE}}fonts/instrument-serif-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{BASE}}fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{BASE}}fonts/fonts.css">
+  <link rel="stylesheet" href="{{BASE}}photo.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="name" href="{{BASE}}">{{SITE_NAME_SHORT}}</a>
+    <a class="all mono" href="{{BASE}}work/">All work →</a>
+  </header>
+  <main class="missing">
+    <p class="mono code">404</p>
+    <h1>This page isn’t here</h1>
+    <p class="lead">The link may be old, a collection may have been renamed, or the photo is no longer on the site.</p>
+    <nav class="mono links" aria-label="Site">
+      <a href="{{BASE}}">Home</a>
+      <a href="{{BASE}}work/">Work</a>
+      <a href="{{BASE}}collections/">Collections</a>
+      <a href="{{BASE}}about/">About</a>
+    </nav>
+  </main>
+  <footer class="mono">{{COPYRIGHT}}</footer>
+</body>
+</html>

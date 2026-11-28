@@ -598,7 +598,7 @@
       builtAt = typeof cfg.built_at === "string" ? cfg.built_at : builtAt;
       if (!$("list").hidden) renderList();
       const n = all.length - before;
-      pubSay(n > 0 ? `Published · ${n} new photo${n === 1 ? "" : "s"} (see Hidden)` : "Published · site is up to date");
+      pubSay(n > 0 ? `Published · ${n} new photo${n === 1 ? "" : "s"} (see Not on Work)` : "Published · site is up to date");
     } catch { pubSay("Published. Reopen the app to see new photos."); }
   }
   async function pubPoll() {

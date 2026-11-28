@@ -1064,6 +1064,13 @@ def _month_year(iso: str) -> str:
         return ""
 
 
+def alt_text(e: dict, holder: str) -> str:
+    """Alt text: the title, or for untitled photos "Photograph by <holder>,
+    <place>, <month>". Same rule as altText() in site/app.js."""
+    first = f"Photograph by {holder}" if holder else "Photograph"
+    return e.get("caption") or ", ".join(x for x in (first, place_label(e.get("place")), _month_year(e.get("taken", ""))) if x)
+
+
 def sitemap_xml(site_url: str, entries: list[dict]) -> str:
     """sitemap.xml: the four pages plus a share page per shown photo (hidden
     photos have none), so search engines and AI search find everything."""
@@ -1100,7 +1107,7 @@ def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_
         "PAGE_TITLE": page_title, "DESCRIPTION": " · ".join(x for x in (subline, r["notice"]) if x),
         "AUTHOR": r["holder"], "COPYRIGHT": r["notice"], "SITE_NAME": site_name, "SITE_NAME_SHORT": name,
         "PAGE_URL": page_url, "OG_IMAGE": img_url(f"img/{pid}-og.jpg", img_base, base), "OG_W": str(og_size[0]), "OG_H": str(og_size[1]),
-        "ALT": title or f"Photograph by {r['holder']}", "HEADING": title or (when or "Untitled"),
+        "ALT": alt_text(e, r["holder"]), "HEADING": title or (when or "Untitled"),
         "SUBLINE": subline if title else place, "GALLERY_URL": f"../../work/#photo-{pid}",
         "IMG_SRC": img_url(mid["url"], img_base, "../../"),
         "IMG_SRCSET": ", ".join(f"{img_url(x['url'], img_base, '../../')} {x['w']}w" for x in srcs),
@@ -1111,6 +1118,20 @@ def photo_page(template: str, e: dict, config: dict, r: dict, site_url: str, og_
         out = out.replace("{{" + k + "}}", html.escape(v, quote=True))
     if not counter:  # counting off: drop the pixel element entirely
         out = re.sub(r'\s*<img class="count"[^>]*>', "", out)
+    return out
+
+
+def not_found_page(template: str, config: dict, r: dict, site_url: str) -> str:
+    """404.html. GitHub Pages serves it for a missing path at any depth, so its
+    links start at the site's root path (from SITE_URL; "/" when unknown)."""
+    name = config.get("name") or config.get("title", "Photography")
+    path = urllib.parse.urlparse(site_url).path.strip("/") if site_url else ""
+    base = f"/{path}/" if path else "/"
+    vals = {"BASE": base, "SITE_NAME": config.get("title") or name, "SITE_NAME_SHORT": name,
+            "AUTHOR": r["holder"], "COPYRIGHT": r["notice"]}
+    out = template
+    for k, v in vals.items():
+        out = out.replace("{{" + k + "}}", html.escape(v, quote=True))
     return out
 
 
@@ -1331,10 +1352,13 @@ def build(photos: list[Photo], config: dict, use_cache: bool = True, img_base: s
             d.mkdir(parents=True, exist_ok=True)
             (d / "index.html").write_text(photo_page(template, e, config, r, site_url, og_sizes[e["id"]], img_base))
 
+    # "Page not found" for any missing path (old links, renamed collections, removed photos).
+    (OUT / "404.html").write_text(not_found_page((OUT / "404.html").read_text(), config, r, site_url))
+
     # Version-stamp local scripts/styles everywhere; the editor app compares
     # its version with version.json to pick up a new build without waiting.
     version = site_version()
-    for page in [OUT / "index.html", OUT / "edit" / "index.html", *(OUT / f / "index.html" for _, f, _ in PAGES if f),
+    for page in [OUT / "index.html", OUT / "404.html", OUT / "edit" / "index.html", *(OUT / f / "index.html" for _, f, _ in PAGES if f),
                  *OUT.glob("p/*/index.html")]:
         text = stamp_assets(page.read_text(), version)
         if page.parent.name == "edit":

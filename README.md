@@ -217,8 +217,9 @@ background) and opens full screen.
   turn it on or off under **Key**. If Face ID can't unlock (e.g. the passkey
   was deleted), tap *Can't unlock?* and paste the key again.
 - **Publish now** (above the grid): starts a site build right away, follows
-  it ("Publishing… about 5 min") and then shows new album photos (under
-  *Hidden*). Needs a **second key**, set once under **Key**: a fine-grained
+  it ("Publishing… about 5 min") and then shows any new album photos
+  (they're on the site at once; find them with *Not on Work* to tick *On
+  Work page*). Needs a **second key**, set once under **Key**: a fine-grained
   key for **this site's repository only** with **Actions: Read and write**
   and nothing else. It can start builds but can't change code, photo data or
   the album secret, so "No expiration" is fine. (A GitHub key has one set of
@@ -230,7 +231,7 @@ background) and opens full screen.
 
 Locations and collections show on the site within minutes (see below). Tags
 stay private to the app (for your own sorting and search); search engines get
-them as hidden keywords. Highlights become the opening slideshow. New album photos show up in the app after the next hourly build.
+them as hidden keywords. Highlights become the opening slideshow. New album photos show up in the app after the next build (hourly when GitHub has capacity, or **Publish now**).
 
 ## The site
 Four pages, built from one template (`site/index.html`, `data-pages` on each
@@ -253,7 +254,7 @@ Cloudflare Email Routing forwards to your inbox). The About page links to it,
 and the full-screen viewer has an **Inquire** link that opens an email with
 the photo's title and link filled in.
 - **Opening screen:** your name in large serif type beside a slideshow of
-  recent work, each framed print shown whole (above the name on phones).
+  your highlights (see *Opening slideshow*), each framed print shown whole (above the name on phones).
 - **Home gallery:** staggered columns that drift at slightly different speeds
   as you scroll, with photos revealed as they come into view.
 - **Work gallery:** justified rows: every photo in a row is the same height,
@@ -265,7 +266,7 @@ the photo's title and link filled in.
 - **Collections:** once you make a collection in the app, links appear above
   the gallery: *All* plus each collection with its count. Choosing one shows
   just that series, in its own order, with its name as the heading. Each has
-  its own link (`…/#collection-florence-at-night`) to share. With no
+  its own link (`…/work/#collection-florence-at-night`) to share. With no
   collections, nothing extra shows.
 - **Captions:** the full-screen viewer shows *title — place — date*
   ("Negotiating Escape — Florence, Italy — Mar 2026"), place at
@@ -329,8 +330,9 @@ its subdomains. The build gets the address from GitHub Pages (`SITE_URL`), so
 nothing in the code names the domain.
 
 ## Image host (Cloudflare R2)
-GitHub Pages sites are limited to about 1 GB, which ~450 photos fill (each
-photo has six sizes). So the images are served from a Cloudflare R2 bucket
+GitHub Pages sites are limited to about 1 GB; at 633 photos the site had
+reached 1.45 GB (each photo has six sizes plus a share image). So the
+images are served from a Cloudflare R2 bucket
 (`alextowbin-photos`, public at **https://img.alextowbin.com**; free up to
 10 GB). Set up once:
 1. Cloudflare → **R2** → create the bucket; bucket **Settings → Custom

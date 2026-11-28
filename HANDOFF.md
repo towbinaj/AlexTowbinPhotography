@@ -1,6 +1,6 @@
 # Handoff — Alex Towbin Photography
 
-Status as of 2026-11-27. Read `CLAUDE.md` first for rules and preferences.
+Status as of 2026-11-28 (docs reviewed; no behavior changes since 2026-11-27). Read `CLAUDE.md` first for rules and preferences.
 The dated sections below are history, newest decisions noted where they
 supersede older ones.
 
@@ -21,9 +21,10 @@ supersede older ones.
   verified on GitHub; Bing Webmaster Tools and Google Search Console verified
   (files `site/BingSiteAuth.xml`, `site/google200abc424b5554f0.html`; keep
   them) with the sitemap submitted to both.
-- **Branches:** `main` is live; work happens on
-  `claude/elegant-hypatia-rpwb2z` and is merged only on the owner's explicit
-  OK. Old `claude/*` branches (and the experimental, unmerged
+- **Branches:** `main` is live; work happens on a `claude/*` branch per
+  session (earlier `claude/elegant-hypatia-rpwb2z`, now
+  `claude/app-documentation-review-j6gkdn`) and is merged only on the
+  owner's explicit OK. Old `claude/*` branches (and the experimental, unmerged
   `claude/location-check`) can be deleted by the owner on GitHub's Branches
   page; the session isn't allowed to delete branches.
 
@@ -67,9 +68,9 @@ supported as a fallback, which `download_album()` picks from the token shape.
 
 **Failure behavior:**
 - An empty or failed fetch makes the build exit 1, so the last good site stays up.
-- If `ICLOUD_ALBUM` is unset, the build uses the `photos/` folder, which
-  doesn't exist. In CI that would produce an empty site. Consider failing
-  instead if the secret is missing (see open items).
+- If `ICLOUD_ALBUM` is unset, a local build uses the `photos/` folder; on
+  GitHub the build fails instead (added 2026-11-19), so a missing secret
+  can't publish an empty site.
 
 ## Front end (`site/`)
 - **Hero:** large serif name (Instrument Serif) beside a slideshow of framed
@@ -96,17 +97,15 @@ supported as a fallback, which `download_album()` picks from the token shape.
   behind content (`z-index: -1`).
 - **Icons:** "AT." monogram (`favicon.ico`, `favicon-32.png`,
   `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest`).
-- **Editor (`#edit`):** owner-only. Asks for a fine-grained GitHub key
-  (stored in that browser's localStorage), then the lightbox shows Title and
-  No. (position) fields. Save writes `curation.json` (`{titles, order}`) via
-  the GitHub contents API → push → deploy (~2 min). Titles are title-cased
-  (`title_case()` in build.py and `site/titlecase.js`, shared test cases).
-  Unplaced (new) photos sort first.
+- **Editor:** the phone app at `site/edit/` (see "Phone editing app"
+  below). The site's old `#edit` mode was removed on 2026-11-18. Titles are
+  title-cased (`title_case()` in build.py and `site/titlecase.js`, shared
+  test cases). Unplaced (new) photos sort first.
 
 ## Decisions log
 | Decision | Why |
 |---|---|
-| GitHub Pages project site, no custom domain | Owner didn't want a new domain |
+| GitHub Pages project site, no custom domain | Owner didn't want a new domain. **Superseded 2026-11-26:** moved to `photo.alextowbin.com` (owner bought `alextowbin.com`) |
 | Build via Actions artifact; photos never in git | Keeps repo small and public-safe |
 | Keep white borders (`trim_white_borders: false`) | Owner: "part of the art". A trim helper exists but is off |
 | Instagram link, not feed | Feed needs a 60-day Meta token, too much upkeep |
@@ -114,7 +113,7 @@ supported as a fallback, which `download_album()` picks from the token shape.
 | Sort `newest-added`, tie-break by date taken | All 32 were added at once |
 | Copyright everywhere + save deterrents | Owner wants to protect the work; it deters, can't prevent |
 | Film grain behind content | It sat over the photos (z-index 50); the art is never overlaid |
-| Titles + order set on the site (`#edit` → `curation.json`) | Apple doesn't expose captions/comments via the public link (tested: change feed is a frozen snapshot); owner keeps using Snapseed |
+| Titles + order set on the site (`#edit` → `curation.json`; now the editor app → data repo) | Apple doesn't expose captions/comments via the public link (tested: change feed is a frozen snapshot); owner keeps using Snapseed |
 
 ## What the album does and doesn't expose (tested 2026-11-17/18)
 - **Location:** 0/34 photos carry GPS (not in files, not in Apple's
@@ -132,7 +131,7 @@ supported as a fallback, which `download_album()` picks from the token shape.
 
 ## Phone editing app (built and live; history of how it got here)
 
-**Step 1 done on branch `claude/elegant-hypatia-rpwb2z` (not merged yet):**
+**Step 1 (branch `claude/elegant-hypatia-rpwb2z`, merged 2026-11-18):**
 `curation.json` moved to the public data repo
 `towbinaj/AlexTowbinPhotographyData` (also on its branch of the same name).
 Site reads it live from raw.githubusercontent.com (≈5 min CDN cache), bakes
@@ -254,7 +253,8 @@ the feature was added); rule shared by site/app/build, parity-tested.
 **Schedule fix (2026-11-18):** the cron trigger had never run (all builds
 were pushes): GitHub ignores schedules last edited via the Claude connection.
 Owner re-saved deploy.yml on github.com; scheduled runs work since 23:24 UTC.
-See CLAUDE.md, "The build schedule belongs to the owner".
+Later found wrong (see the correction below and CLAUDE.md, "The build
+schedule is best effort").
 
 **Reliability + share pages (branch, 2026-11-19):** local .js/.css get
 `?v=<hash of site/>`; `version.json`; the editor reloads onto a newer build
@@ -310,11 +310,9 @@ none); old hash links forward to work/. Prints: `prints_email`
 (prints@alextowbin.com via Cloudflare Email Routing, set up by the owner),
 About block + lightbox Inquire mailto (title + share link). Share pages link
 to `work/#photo-…`. Phone header hides the Instagram link.
-Still to do:
-remove `#edit` once the app has fully replaced it. Not done: Face ID lock
-(optional); step 5 site changes (collections as sections, highlights on the
-main page/hero, build-side validation of the new fields); then remove `#edit`.
-The owner wants a small editor on their phone: set a title, assign a photo to
+*(Original plan, kept for history: all five steps below are done, `#edit`
+was removed and the Face ID lock was added.)*
+The owner wanted a small editor on their phone: set a title, assign a photo to
 a **collection** (series), set its **position within the collection**, toggle
 a **main-page highlight**, and **check its location**. Agreed design:
 

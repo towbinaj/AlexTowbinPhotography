@@ -1,0 +1,31 @@
+name: Tests
+
+# Runs the offline test suite on every pull request, so problems show up on
+# the PR before anything is merged (the deploy runs the same tests again).
+# No secrets and no network: the tests use fake iCloud responses.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt pytest
+
+      - run: python -m pytest -q tests

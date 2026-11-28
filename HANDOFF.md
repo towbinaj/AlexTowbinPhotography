@@ -89,7 +89,13 @@ supported as a fallback, which `download_album()` picks from the token shape.
   `{{COPYRIGHT}}`, `{{JSONLD}}`, `{{OG_IMAGE}}`) are filled by `build.py`.
   The JSON-LD is an `ImageGallery` with an `ImageObject` per photo (creator,
   copyrightNotice, creditText, license → `#rights`).
-- **Fonts:** Google Fonts (Instrument Serif, Geist, Geist Mono).
+- **Fonts:** self-hosted since 2026-11-28 (`site/fonts/`: Instrument Serif,
+  Geist, Geist Mono; latin + latin-ext woff2 from Google Fonts, OFL in
+  `OFL.txt`). CSP is `font-src 'self'`; no requests to Google.
+- **404:** `site/404.html` (no scripts), filled by `not_found_page()`; links
+  are root-relative (from `SITE_URL`'s path) because Pages serves it at any depth.
+- **Alt text:** title, else "Photograph by <holder>, <place>, <month>"
+  (`altText()` in app.js = `alt_text()` in build.py, used on share pages).
 - **Header:** opaque (page background + hairline), `scroll-padding-top` keeps
   anchors clear of it.
 - **Photos are never cropped or overlaid:** hero zoom runs 96%→100%; tile
@@ -342,6 +348,10 @@ a **main-page highlight**, and **check its location**. Agreed design:
 5. **Site changes that follow:** collections as sections, highlights on the
    main page / hero, per-collection order. Keep the current `#edit` until the
    app replaces it, then remove it.
+
+**Polish (2026-11-28, branch `claude/app-documentation-review-j6gkdn`):**
+tests on every PR (`test.yml`, no secrets), a 404 page, alt text for
+untitled photos, self-hosted fonts. Docs refreshed.
 
 ## Open items / ideas
 1. ~~Google Search Console~~ Done 2026-11-27: verified as a URL-prefix

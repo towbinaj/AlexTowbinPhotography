@@ -29,3 +29,11 @@ main { flex: 1; display: flex; flex-direction: column; align-items: center; just
 .caption p { margin: 0; color: var(--muted); }
 .count { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 footer { padding: 18px var(--pad) calc(18px + env(safe-area-inset-bottom)); color: var(--muted); border-top: 1px solid var(--line); text-align: center; }
+/* 404 page (404.html) shares this stylesheet. */
+.missing { text-align: center; gap: 14px; }
+.missing .code { margin: 0; color: var(--accent); }
+.missing h1 { margin: 0; font: 400 clamp(38px, 7vw, 72px)/1.02 var(--serif); letter-spacing: -.01em; }
+.missing .lead { margin: 0; max-width: 34em; color: var(--muted); }
+.missing .links { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px; margin-top: 14px; }
+.missing .links a { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.missing .links a:hover { border-color: var(--fg); }

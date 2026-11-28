@@ -9,6 +9,11 @@
     const d = iso ? new Date(iso) : null;
     return d && !isNaN(d) ? d.toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "";
   };
+  // Alt text: the title, or for untitled photos "Photograph by <name>, <place>, <month>"
+  // (screen readers and image search get something useful). Same rule as alt_text() in build.py.
+  let altHolder = "";
+  const altText = (p) => p.caption ||
+    [altHolder ? `Photograph by ${altHolder}` : "Photograph", window.PhotoMeta.placeLabel(p.place), monthYear(p.taken)].filter(Boolean).join(", ");
 
   // ---------------- pages ----------------
   // The same page template is built as home, work/, collections/ and about/
@@ -75,7 +80,7 @@
     img.decoding = "async";
     img.draggable = false;
     if (!eager) img.loading = "lazy";
-    img.alt = p.caption || "";
+    img.alt = altText(p);
     img.width = p.w; img.height = p.h;
     img.sizes = sizes;
     img.srcset = srcset(p);
@@ -94,6 +99,7 @@
     $("rights-notice").textContent = r.notice;
     $("rights-terms").textContent = r.terms;
     $("lb-credit").textContent = `© ${r.holder}`;
+    altHolder = r.holder || name;
     if (cfg.built) $("footer-updated").textContent = "Updated " + monthYear(cfg.built + "T12:00:00Z");
 
     const h1 = $("hero-name");
@@ -257,7 +263,7 @@
       const a = document.createElement("a");
       a.className = "ph";
       a.href = `#photo-${p.id}`;
-      a.setAttribute("aria-label", p.caption ? `Open: ${p.caption}` : `Open photo ${i + 1}`);
+      a.setAttribute("aria-label", `Open: ${altText(p)}`);
       const frame = document.createElement("div");
       frame.className = "frame";
       frame.style.backgroundImage = `url("${p.lqip}")`;
@@ -327,7 +333,7 @@
   }
 
   function setLbImage(p, placeholderSrc) {
-    lbImg.alt = p.caption || "";
+    lbImg.alt = altText(p);
     lbImg.width = p.w; lbImg.height = p.h;
     if (placeholderSrc) lbImg.src = placeholderSrc;
     const want = bestSrc(p, lbTargetWidth(p));

@@ -1116,3 +1116,42 @@ def test_duplicate_photo_in_album_is_shown_once(tmp_path, monkeypatch):
     build.build(demo + [demo[0]], {"name": "Test"}, use_cache=False)
     listed = json.loads((tmp_path / "_site" / "photos.json").read_text())
     assert [e["id"] for e in listed].count(demo[0].id) == 1
+
+
+def test_alt_text_for_titled_and_untitled_photos():
+    e = {"caption": "", "taken": "2026-03-04T10:00:00Z", "place": FLORENCE}
+    assert build.alt_text(e, "Test Person") == "Photograph by Test Person, Florence, Italy, Mar 2026"
+    assert build.alt_text({"caption": "", "taken": ""}, "Test Person") == "Photograph by Test Person"
+    assert build.alt_text({"caption": "", "taken": ""}, "") == "Photograph"
+    assert build.alt_text({**e, "caption": "Dusk"}, "Test Person") == "Dusk"
+
+
+def test_not_found_page_links_from_the_site_root():
+    template = (Path(__file__).resolve().parent.parent / "site" / "404.html").read_text()
+    r = build.rights({"name": "Test <Person>", "copyright_start_year": 2026})
+    cfg = {"name": "Test <Person>", "title": "Test Photography"}
+    out = build.not_found_page(template, cfg, r, "https://example.org")
+    assert 'href="/work/"' in out and 'href="/fonts/fonts.css"' in out and "{{" not in out
+    assert "<Person>" not in out and "Test &lt;Person&gt;" in out and "noindex" in out
+    assert "script-src 'none'" in out
+    sub = build.not_found_page(template, cfg, r, "https://example.github.io/Repo")
+    assert 'href="/Repo/work/"' in sub and 'href="/Repo/"' in sub
+    assert 'href="/collections/"' in build.not_found_page(template, cfg, r, "")
+
+
+def test_build_writes_404_page(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "OUT", tmp_path / "_site")
+    build.build(build.demo_photos(1), {"name": "Test"}, use_cache=False)
+    out = (tmp_path / "_site" / "404.html").read_text()
+    assert "{{" not in out and "photo.css?v=" in out and "Page not found" in out
+
+
+def test_pages_use_self_hosted_fonts_only():
+    site = Path(__file__).resolve().parent.parent / "site"
+    css = (site / "fonts" / "fonts.css").read_text()
+    for f in ("index.html", "photo.html", "404.html", "edit/index.html"):
+        text = (site / f).read_text()
+        assert "fonts.googleapis.com" not in text and "fonts.gstatic.com" not in text, f
+        assert "fonts/fonts.css" in text and "font-src 'self'" in text, f
+    for name in __import__("re").findall(r'url\("([^"]+)"\)', css):
+        assert (site / "fonts" / name).is_file(), name

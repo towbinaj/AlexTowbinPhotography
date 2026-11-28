@@ -285,7 +285,14 @@ the photo's title and link filled in.
 - **Loading and polish:** a blurred preview shows instantly while each image
   loads, plus subtle film grain.
 - **Accessibility:** motion is turned off for visitors who ask for reduced
-  motion.
+  motion. Every photo has alt text: its title, or for untitled photos
+  "Photograph by Alex Towbin, <place>, <month>" (also helps image search).
+- **Page not found:** a missing address (an old link, a renamed collection,
+  a removed photo) shows the site's own 404 page with links to Home, Work,
+  Collections and About.
+- **Fonts:** Instrument Serif, Geist and Geist Mono are served from the site
+  itself (`site/fonts/`, SIL Open Font License, Latin and accented Latin
+  only), so pages load nothing from Google.
 - **Icons:** an "AT." monogram in the site's serif type, used for the browser
   tab (`favicon.ico`, `favicon-32.png`) and the iPhone home screen
   (`apple-touch-icon.png`, titled "Alex Towbin"). `site.webmanifest` gives
@@ -386,3 +393,5 @@ ICLOUD_ALBUM='<album link>' python scripts/build.py   # or: --demo 30 for placeh
 python -m http.server -d _site 8000                   # open http://localhost:8000
 python -m pytest -q tests
 ```
+The tests also run on every pull request (`.github/workflows/test.yml`), so
+a problem shows on the PR before anything is merged.
